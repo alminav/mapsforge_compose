@@ -95,8 +95,8 @@ fun MainScreen(viewModel: MainViewModel) {
                 onRegionChanged = {
                     viewModel.setRegion(viewModel.getSettingsRepository().getSelectedRegion())
                 },
-                onFollowGpsChanged = {
-                    viewModel.setFollowGps(viewModel.getSettingsRepository().getFollowGps())
+                onFollowGpsChanged = { enabled ->
+                    viewModel.setFollowGps(enabled)
                 },
                 onThemeFileSelected = { uri ->
                     viewModel.importThemeFile(context, uri)
@@ -253,8 +253,8 @@ fun MapViewContainerContent(
                     Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
                 }
             }
+            mapControls()
         }
-        mapControls()
     }
 }
 

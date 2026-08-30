@@ -25,7 +25,7 @@ fun SettingsScreen(
     repository: SettingsRepository,
     onBack: () -> Unit,
     onRegionChanged: () -> Unit,
-    onFollowGpsChanged: () -> Unit = {},
+    onFollowGpsChanged: (Boolean) -> Unit = {},
     onThemeFileSelected: (Uri) -> Unit = {},
     onResetTheme: () -> Unit = {},
     onThemeSelected: (String) -> Unit = {},
@@ -135,7 +135,7 @@ fun SettingsScreen(
                         onCheckedChange = {
                             repository.setFollowGps(it)
                             followGps = it
-                            onFollowGpsChanged()
+                            onFollowGpsChanged(it)
                         }
                     )
                 }
