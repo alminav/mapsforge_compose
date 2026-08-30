@@ -1,0 +1,46 @@
+<resources>
+    <string name="app_name">mapsforge_compose</string>
+    <string name="tour_history_title">Touren</string>
+    <string name="tour_history_empty">Noch keine Touren aufgezeichnet.</string>
+    <string name="tour_close_description">Schließen</string>
+    <string name="tour_distance">Distanz: %.2f km</string>
+    <string name="tour_elevation">Aufstieg: %.0f m</string>
+    <string name="tour_points">Punkte: %d</string>
+
+    <string name="tour_menu_import">Aus KML importieren</string>
+    <string name="tour_menu_export">Als KML exportieren</string>
+    <string name="tour_menu_delete">Löschen</string>
+    <string name="tour_export_success">Tour erfolgreich exportiert</string>
+    <string name="tour_export_error">Fehler beim Exportieren</string>
+    <string name="tour_import_success">Tour erfolgreich importiert</string>
+    <string name="tour_import_started">Tour Import gestartet</string>
+    <string name="tour_import_error">Fehler beim Importieren</string>
+
+    <string name="stat_label_distance">Distanz</string>
+    <string name="stat_label_speed">Tempo</string>
+    <string name="stat_label_ascent">Aufstieg</string>
+    <string name="stat_label_altitude">Höhe</string>
+
+    <string name="stat_format_km">%.2f km</string>
+    <string name="stat_format_kmh">%.1f km/h</string>
+    <string name="stat_format_meters_plus">+%.0f m</string>
+    <string name="stat_format_meters">%.0f m</string>
+    <string name="tour_menu_edit_name">Name bearbeiten</string>
+    <string name="tour_name_label">Tour Name</string>
+    <string name="tour_sort_by_date">Nach Datum</string>
+    <string name="tour_sort_by_name">Nach Name</string>
+    <string name="tour_sort_by_distance">Nach Distanz</string>
+    <string name="tour_sort_by_proximity">Tour Entfernung</string>
+
+    <string name="map_loading_progress">%1$s Karte wird geladen…</string>
+    <string name="tracking_start">Start ⏺️</string>
+    <string name="tracking_stop">Stop ⏹️</string>
+    <string name="menu_archive">Archiv 📜</string>
+    <string name="menu_settings">Optionen ⚙️</string>
+    <string name="action_follow_gps">GPS folgen</string>
+    <string name="action_delete_track">Löschen</string>
+    <string name="eco_mode_active">🌱 Akkusparmodus aktiv</string>
+    <string name="zoom_in">Zoom In</string>
+    <string name="zoom_out">Zoom Out</string>
+    <string name="tracking_stopped">Tracking stopped</string>
+</resources>
