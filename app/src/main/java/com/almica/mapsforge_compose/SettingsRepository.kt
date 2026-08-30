@@ -19,6 +19,23 @@ object MapRegions {
     )
 }
 
+data class RenderTheme(
+    val id: String,
+    val displayName: String,
+    val relativePath: String
+)
+
+object RenderThemes {
+    val AVAILABLE_THEMES = listOf(
+        RenderTheme("cruiser", "Cruiser", "cruiser/default.xml"),
+        RenderTheme("mapsforge", "Mapsforge", "mapsforge/osmarender.xml"),
+        RenderTheme("outdooractive", "OutdoorActive", "outdooractive/outdooractive.xml"),
+        RenderTheme("contrast", "Contrast", "render_contrast/render.xml"),
+        RenderTheme("outdoor", "Outdoor", "render_outdoor/render.xml"),
+        RenderTheme("simplyhike", "SimplyHike", "render_simplyhike/render.xml")
+    )
+}
+
 class SettingsRepository(context: Context) {
     private val sharedPreferences = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
 
@@ -49,5 +66,26 @@ class SettingsRepository(context: Context) {
 
     fun setFollowGps(enabled: Boolean) {
         sharedPreferences.edit { putBoolean("follow_gps", enabled) }
+    }
+
+    fun getThemeFilePath(): String? {
+        return sharedPreferences.getString("theme_file_path", null)
+    }
+
+    fun setThemeFilePath(path: String?) {
+        sharedPreferences.edit { putString("theme_file_path", path) }
+    }
+
+    fun getSelectedThemeId(): String {
+        return sharedPreferences.getString("selected_theme_id", "simplyhike") ?: "simplyhike"
+    }
+
+    fun setSelectedThemeId(id: String) {
+        sharedPreferences.edit { putString("selected_theme_id", id) }
+    }
+
+    fun getSelectedTheme(): RenderTheme {
+        val id = getSelectedThemeId()
+        return RenderThemes.AVAILABLE_THEMES.find { it.id == id } ?: RenderThemes.AVAILABLE_THEMES.last() // simplyhike is last
     }
 }

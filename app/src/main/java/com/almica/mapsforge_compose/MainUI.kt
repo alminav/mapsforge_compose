@@ -97,7 +97,17 @@ fun MainScreen(viewModel: MainViewModel) {
                 },
                 onFollowGpsChanged = {
                     viewModel.setFollowGps(viewModel.getSettingsRepository().getFollowGps())
-                }
+                },
+                onThemeFileSelected = { uri ->
+                    viewModel.importThemeFile(context, uri)
+                },
+                onResetTheme = {
+                    viewModel.resetTheme()
+                },
+                onThemeSelected = { themeId ->
+                    viewModel.selectBuiltInTheme(themeId)
+                },
+                currentThemeFile = uiState.themeFile
             )
         }
     )

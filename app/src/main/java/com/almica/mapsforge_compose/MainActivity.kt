@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val viewModel: MainViewModel = viewModel(
-                factory = MainViewModelFactory(settingsRepository, db, externalFilesDir)
+                factory = MainViewModelFactory(application, settingsRepository, db, externalFilesDir)
             )
             MainScreen(viewModel)
         }

@@ -15,6 +15,7 @@ import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.rendertheme.ExternalRenderTheme
+import timber.log.Timber
 import java.io.File
 
 @Composable
@@ -34,6 +35,7 @@ fun MapsforgeMapView(
     val gpsMarker = remember { createGpsMarker() }
     val loadedPolyline = remember { createPolyline(Color.RED) }
     val activePolyline = remember { createPolyline(Color.GREEN) }
+    val tileRendererLayer = remember { mutableStateOf<TileRendererLayer?>(null) }
 
     LaunchedEffect(currentLocation, loadedTrackPoints, activeTrackPoints, followGps) {
         val map = mapViewInstance.value ?: return@LaunchedEffect
@@ -53,6 +55,21 @@ fun MapsforgeMapView(
         map.layerManager.redrawLayers()
     }
 
+    LaunchedEffect(themeXmlFile) {
+        val layer = tileRendererLayer.value ?: return@LaunchedEffect
+        Timber.i("Theme selected: ${themeXmlFile?.absolutePath}")
+        try {
+            if (themeXmlFile != null && themeXmlFile.exists()) {
+                layer.setXmlRenderTheme(ExternalRenderTheme(themeXmlFile))
+            } else {
+                layer.setXmlRenderTheme(org.mapsforge.map.rendertheme.InternalRenderTheme.DEFAULT)
+            }
+            mapViewInstance.value?.layerManager?.redrawLayers()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to apply theme")
+        }
+    }
+
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { ctx ->
@@ -67,17 +84,20 @@ fun MapsforgeMapView(
 
                 if (mapFile != null && mapFile.exists()) {
                     val mapDataStore = org.mapsforge.map.reader.MapFile(mapFile)
-                    val tileRendererLayer = TileRendererLayer(
+                    val trl = TileRendererLayer(
                         cache, mapDataStore, getModel().mapViewPosition, AndroidGraphicFactory.INSTANCE
                     )
-                    
+                    tileRendererLayer.value = trl
+                    Timber.i("try external theme file: ${themeXmlFile?.absolutePath}")
                     if (themeXmlFile != null && themeXmlFile.exists()) {
-                        tileRendererLayer.setXmlRenderTheme(ExternalRenderTheme(themeXmlFile))
+                        trl.setXmlRenderTheme(ExternalRenderTheme(themeXmlFile))
+                        Timber.i("Using external theme file: ${themeXmlFile.absolutePath}")
                     } else {
-                        tileRendererLayer.setXmlRenderTheme(org.mapsforge.map.rendertheme.InternalRenderTheme.DEFAULT)
+                        trl.setXmlRenderTheme(org.mapsforge.map.rendertheme.InternalRenderTheme.DEFAULT)
+                        Timber.i("Using internal theme")
                     }
 
-                    layerManager.layers.add(tileRendererLayer)
+                    layerManager.layers.add(trl)
                     getModel().mapViewPosition.setZoomLevel(15.toByte())
                 }
                 mapViewInstance.value = this

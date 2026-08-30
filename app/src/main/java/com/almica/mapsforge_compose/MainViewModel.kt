@@ -1,15 +1,21 @@
 package com.almica.mapsforge_compose
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.mapsforge.core.model.LatLong
 import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
 
 data class MainUiState(
     val currentScreen: AppScreen = AppScreen.MAP,
@@ -27,17 +33,21 @@ data class MainUiState(
 )
 
 class MainViewModel(
+    application: Application,
     private val settingsRepository: SettingsRepository,
     val db: TourDatabase,
     private val externalFilesDir: File?
-) : ViewModel() {
+) : AndroidViewModel(application) {
+
+    private val themeDir = externalFilesDir?.resolve("themes")
 
     private val _uiState = MutableStateFlow(
         MainUiState(
             currentRegion = settingsRepository.getSelectedRegion(),
             followGps = settingsRepository.getFollowGps(),
-            mapFileExists = externalFilesDir?.let { File(it, settingsRepository.getSelectedRegion().fileName).exists() } ?: false,
-            externalFilesDir = externalFilesDir
+            mapFileExists = externalFilesDir?.resolve(settingsRepository.getSelectedRegion().fileName)?.exists() ?: false,
+            externalFilesDir = externalFilesDir,
+            themeFile = getThemeFile()
         )
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -66,11 +76,22 @@ class MainViewModel(
         }
     }
 
-    private fun downloadMapAndTheme(region: MapRegion) {
-        if (externalFilesDir == null) return
+    private fun getThemeFile(): File? {
+        settingsRepository.getThemeFilePath()?.let { path ->
+            val file = File(path)
+            if (file.exists()) {
+                Timber.i("Using custom theme file: ${file.path}")
+                return file
+            }
+        }
+        
+        val selectedTheme = settingsRepository.getSelectedTheme()
+        return themeDir?.resolve(selectedTheme.relativePath)
+    }
 
-        val mapFile = File(externalFilesDir, region.fileName)
-        val themeDir = File(externalFilesDir, "themes")
+    private fun downloadMapAndTheme(region: MapRegion) {
+        val externalDir = externalFilesDir ?: return
+        val mapFile = externalDir.resolve(region.fileName)
 
         viewModelScope.launch {
             _uiState.update { it.copy(isDownloading = true, downloadProgress = 0f) }
@@ -82,8 +103,9 @@ class MainViewModel(
                 _uiState.update { it.copy(downloadProgress = progress) }
             }
             
-            val downloadedTheme = ThemeDownloader.downloadThemeIfMissing(themeDir)
-
+            themeDir?.let { ThemeDownloader.extractThemesIfMissing(getApplication(), it) }
+            val downloadedTheme = getThemeFile()
+            Timber.i("Theme file exists: ${downloadedTheme?.path}")
             _uiState.update {
                 it.copy(
                     isDownloading = false,
@@ -115,6 +137,46 @@ class MainViewModel(
         _uiState.update { it.copy(loadedTrackPoints = points) }
     }
 
+    fun setThemeFile(file: File?) {
+        settingsRepository.setThemeFilePath(file?.absolutePath)
+        _uiState.update { it.copy(themeFile = getThemeFile()) }
+    }
+
+    fun selectBuiltInTheme(themeId: String) {
+        settingsRepository.setSelectedThemeId(themeId)
+        settingsRepository.setThemeFilePath(null) // Clear custom theme when selecting built-in
+        _uiState.update { it.copy(themeFile = getThemeFile()) }
+    }
+
+    fun importThemeFile(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            val file = withContext(Dispatchers.IO) {
+                try {
+                    val targetDir = externalFilesDir?.resolve("themes/custom") ?: return@withContext null
+                    targetDir.mkdirs()
+                    val fileName = "custom_theme.xml"
+                    val targetFile = File(targetDir, fileName)
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        FileOutputStream(targetFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    if (targetFile.exists()) targetFile else null
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to import theme file")
+                    null
+                }
+            }
+            setThemeFile(file)
+        }
+    }
+
+    fun resetTheme() {
+        setThemeFile(null)
+        // Trigger redownload/reselect of default theme
+        downloadMapAndTheme(_uiState.value.currentRegion)
+    }
+
     fun startTracking(context: Context) {
         context.startService(Intent(context, TrackingService::class.java))
         _uiState.update { it.copy(isTrackingActive = true) }
@@ -135,6 +197,7 @@ class MainViewModel(
 }
 
 class MainViewModelFactory(
+    private val application: Application,
     private val settingsRepository: SettingsRepository,
     private val db: TourDatabase,
     private val externalFilesDir: File?
@@ -142,7 +205,7 @@ class MainViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return MainViewModel(settingsRepository, db, externalFilesDir) as T
+            return MainViewModel(application, settingsRepository, db, externalFilesDir) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

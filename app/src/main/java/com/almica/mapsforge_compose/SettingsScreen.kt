@@ -1,20 +1,23 @@
 package com.almica.mapsforge_compose
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -22,13 +25,24 @@ fun SettingsScreen(
     repository: SettingsRepository,
     onBack: () -> Unit,
     onRegionChanged: () -> Unit,
-    onFollowGpsChanged: () -> Unit = {}
+    onFollowGpsChanged: () -> Unit = {},
+    onThemeFileSelected: (Uri) -> Unit = {},
+    onResetTheme: () -> Unit = {},
+    onThemeSelected: (String) -> Unit = {},
+    currentThemeFile: File? = null
 ) {
     BackHandler(onBack = onBack)
     var selectedId by remember { mutableStateOf(repository.getSelectedRegionId()) }
+    var selectedThemeId by remember { mutableStateOf(repository.getSelectedThemeId()) }
     var altitudeCorrection by remember { mutableStateOf(repository.getAltitudeCorrection()) }
     var followGps by remember { mutableStateOf(repository.getFollowGps()) }
     var showAltitudeDialog by remember { mutableStateOf(false) }
+
+    val themePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { onThemeFileSelected(it) }
+    }
 
     if (showAltitudeDialog) {
         var tempValue by remember { mutableStateOf(altitudeCorrection.toString()) }
@@ -123,6 +137,31 @@ fun SettingsScreen(
                             followGps = it
                             onFollowGpsChanged()
                         }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = "Integriertes Theme wählen",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(RenderThemes.AVAILABLE_THEMES) { theme ->
+                    FilterChip(
+                        selected = selectedThemeId == theme.id && repository.getThemeFilePath() == null,
+                        onClick = {
+                            selectedThemeId = theme.id
+                            onThemeSelected(theme.id)
+                        },
+                        label = { Text(theme.displayName) }
                     )
                 }
             }
