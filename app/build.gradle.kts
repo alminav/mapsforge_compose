@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.almica.mapsforge_compose"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
@@ -56,6 +56,7 @@ dependencies {
 
     // Google Play Services for Location & Activity Recognition
     implementation(libs.play.services.location)
+    implementation(libs.googleMapsUtils)
 
     // Mapsforge
     implementation(libs.mapsforge.android)
@@ -72,4 +73,12 @@ dependencies {
     
     // Logging
     implementation(libs.timber)
+
+    // Android Maps Utils
+
+    // Preference
+    implementation(libs.androidx.preference.ktx)
+
+    // GraphHopper
+    implementation(project(":graphhopper"))
 }

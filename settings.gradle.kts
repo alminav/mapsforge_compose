@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "mapsforge_compose"
 include(":app")
+include(":graphhopper")

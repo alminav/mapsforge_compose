@@ -44,4 +44,17 @@
     <string name="zoom_in">Zoom In</string>
     <string name="zoom_out">Zoom Out</string>
     <string name="tracking_stopped">Tracking stopped</string>
+    <string name="gh_load_error">GH load error %1$s</string>
+    <string name="gh_load_ok">GH load ok %1$s</string>
+    <string name="gh_folder_not_found">GH folder not found %1$s</string>
+    <string name="setting_locomotion">setting_locomotion</string>
+    <string name="pedestrian">Pedestrian</string>
+    <string name="bicycle_short">Bicycle (short)</string>
+    <string name="bicycle_fast">Bicycle (fast)</string>
+    <string name="car_short">Car (short)</string>
+    <string name="car_fast">Car (fast)</string>
+    <string name="airplane">Airplane</string>
+    <string name="gh_initialization">GH initialization %1$s</string>
+    <string name="gh_not_initialzed">GH not initialzed</string>
+    <string name="graphhopper_route_calculation">GH route calculation</string>
 </resources>

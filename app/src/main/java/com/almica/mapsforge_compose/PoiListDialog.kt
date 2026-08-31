@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -20,7 +21,8 @@ fun PoiListDialog(
     pois: List<PoiEntity>,
     onDismiss: () -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
-    onDeletePoi: (PoiEntity) -> Unit
+    onDeletePoi: (PoiEntity) -> Unit,
+    onCalculateRoute: (Double, Double) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -35,11 +37,12 @@ fun PoiListDialog(
                     items(pois) { poi ->
                         PoiListItem(
                             poi = poi,
-                            onClick = { 
+                            onClick = {
                                 onPoiClick(poi)
                                 onDismiss()
                             },
-                            onDelete = { onDeletePoi(poi) }
+                            onDelete = { onDeletePoi(poi) },
+                            onCalculate = { onCalculateRoute(poi.latitude, poi.longitude) }
                         )
                     }
                 }
@@ -57,7 +60,8 @@ fun PoiListDialog(
 fun PoiListItem(
     poi: PoiEntity,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onCalculate: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -90,6 +94,13 @@ fun PoiListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+        IconButton(onClick = onCalculate) {
+            Icon(
+                imageVector = Icons.Default.Navigation,
+                contentDescription = "POI Ziel",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         IconButton(onClick = onDelete) {
             Icon(

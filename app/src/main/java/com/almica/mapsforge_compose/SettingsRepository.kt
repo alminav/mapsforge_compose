@@ -10,6 +10,7 @@ data class MapRegion(
     val fileName: String
 )
 
+// ToDo world.map from assets
 object MapRegions {
     val AVAILABLE_REGIONS = listOf(
         MapRegion("niedersachsen", "Niedersachsen", "https://download.mapsforge.org/maps/v5/europe/germany/niedersachsen.map", "niedersachsen.map"),

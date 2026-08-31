@@ -8,6 +8,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.almica.mapsforge_compose.gh.Const
+import com.almica.mapsforge_compose.gh.GhHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.delay
@@ -18,6 +20,8 @@ import org.mapsforge.core.model.LatLong
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 
 data class MainUiState(
     val currentScreen: AppScreen = AppScreen.MAP,
@@ -159,7 +163,7 @@ class MainViewModel(
     private fun scheduleSave() {
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
-            delay(500)
+            delay(500.milliseconds)
             val state = _uiState.value
             state.targetPosition?.let {
                 settingsRepository.setLastLatitude(it.latitude)
@@ -249,6 +253,23 @@ class MainViewModel(
     fun getExternalFilesDir() = externalFilesDir
     
     fun getSettingsRepository() = settingsRepository
+    fun calculateRoute(context: Context, startLat: Double, startLon: Double, stopLat: Double, stopLon: Double) {
+        val ghRootFolder = externalFilesDir?.let { File(it, Const.GH_ROOT_FOLDER) }
+        val ghDefaultFolder = ghRootFolder?.let { File(it, "n52e0103d") }
+        viewModelScope.launch {
+            val result = GhHelper.ghCalc(
+                context,
+                ghDefaultFolder,
+                startLat,
+                startLon,
+                stopLat,
+                stopLon
+            )
+            if (result.success) {
+                setLoadedTrackPoints(result.points)
+            }
+        }
+    }
 }
 
 class MainViewModelFactory(

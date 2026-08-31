@@ -134,8 +134,11 @@ fun MapsforgeMapView(
             updatePolyline(view, loadedPolyline, loadedTrackPoints)
             updatePolyline(view, activePolyline, activeTrackPoints)
 
-            // Update POIs
-            updatePoiMarkers(view, pois, currentOnPoiClick)
+            // Update POIs (only when pois or zoomLevel change)
+            if (view.tag != pois.hashCode() + state.zoomLevel) {
+                updatePoiMarkers(view, pois, state.zoomLevel, currentOnPoiClick)
+                view.tag = pois.hashCode() + state.zoomLevel
+            }
             
             // Update Theme
             val trl = view.layerManager.layers.filterIsInstance<TileRendererLayer>().firstOrNull()
@@ -215,7 +218,7 @@ private fun updatePolyline(map: MapView, polyline: Polyline, points: List<RouteP
     }
 }
 
-private fun updatePoiMarkers(map: MapView, pois: List<PoiEntity>, onPoiClick: (PoiEntity) -> Unit) {
+private fun updatePoiMarkers(map: MapView, pois: List<PoiEntity>, zoomLevel: Int, onPoiClick: (PoiEntity) -> Unit) {
     val layers = map.layerManager.layers
     
     // Remove old POI markers
@@ -224,7 +227,7 @@ private fun updatePoiMarkers(map: MapView, pois: List<PoiEntity>, onPoiClick: (P
 
     // Add new markers
     pois.forEach { poi ->
-        val marker = createPoiMarker(poi, onPoiClick, map)
+        val marker = createPoiMarker(poi, zoomLevel, onPoiClick, map)
         layers.add(marker)
     }
 }
@@ -233,9 +236,11 @@ private class PoiMarker(
     latLong: LatLong, 
     bitmap: org.mapsforge.core.graphics.Bitmap, 
     val poi: PoiEntity,
+    horizontalOffset: Int,
+    verticalOffset: Int,
     private val onClick: (PoiEntity) -> Unit,
     private val mapView: MapView
-) : Marker(latLong, bitmap, 0, 0) {
+) : Marker(latLong, bitmap, horizontalOffset, verticalOffset) {
     override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
         if (contains(layerXY, tapXY, mapView)) {
             onClick(poi)
@@ -245,25 +250,34 @@ private class PoiMarker(
     }
 }
 
-private fun createPoiMarker(poi: PoiEntity, onPoiClick: (PoiEntity) -> Unit, mapView: MapView): PoiMarker {
-    val size = 48
-    val radius = 20
+private fun createPoiMarker(poi: PoiEntity, zoomLevel: Int, onPoiClick: (PoiEntity) -> Unit, mapView: MapView): PoiMarker {
+    val radius = (zoomLevel * 1.1f).toInt().coerceIn(8, 40)
+    val size = radius * 2 + 4
     val bitmap = AndroidGraphicFactory.INSTANCE.createBitmap(size, size)
     val canvas = AndroidGraphicFactory.INSTANCE.createCanvas()
     canvas.setBitmap(bitmap)
+    
+    val center = size / 2.0f
     
     val paint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
         setColor(Color.RED)
         setStyle(org.mapsforge.core.graphics.Style.FILL)
     }
-    canvas.drawCircle(size / 2, size / 2, radius, paint)
+    canvas.drawCircle(center.toInt(), center.toInt(), radius, paint)
     
     val borderPaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
-        setColor(Color.BLACK)
-        strokeWidth = 3f
+        setColor(Color.WHITE) // White border often looks better on maps
+        strokeWidth = 2f
         setStyle(org.mapsforge.core.graphics.Style.STROKE)
     }
-    canvas.drawCircle(size / 2, size / 2, radius, borderPaint)
+    canvas.drawCircle(center.toInt(), center.toInt(), radius, borderPaint)
     
-    return PoiMarker(LatLong(poi.latitude, poi.longitude), bitmap, poi, onPoiClick, mapView)
+    val outerBorderPaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+        setColor(Color.BLACK)
+        strokeWidth = 1f
+        setStyle(org.mapsforge.core.graphics.Style.STROKE)
+    }
+    canvas.drawCircle(center.toInt(), center.toInt(), radius + 1, outerBorderPaint)
+    
+    return PoiMarker(LatLong(poi.latitude, poi.longitude), bitmap, poi, 0, 0, onPoiClick, mapView)
 }

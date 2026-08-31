@@ -94,7 +94,10 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 },
                 onHistoryClick = { viewModel.setScreen(AppScreen.HISTORY) },
-                onSettingsClick = { viewModel.setScreen(AppScreen.SETTINGS) }
+                onSettingsClick = { viewModel.setScreen(AppScreen.SETTINGS) },
+                onCalculateRoute = { sLat, sLon, eLat, eLon ->
+                    viewModel.calculateRoute(context, sLat, sLon, eLat, eLon)
+                }
             )
         },
         tourHistoryScreen = {
@@ -150,7 +153,9 @@ fun MainScreenContent(
         modifier = Modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        Box(modifier = Modifier
+            .padding(innerPadding)
+            .fillMaxSize()) {
             when (currentScreen) {
                 AppScreen.MAP -> mapViewContainer()
                 AppScreen.HISTORY -> tourHistoryScreen()
@@ -177,7 +182,8 @@ fun MapViewContainer(
     onClearTrack: () -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onHistoryClick: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onCalculateRoute: (Double, Double, Double, Double) -> Unit
 ) {
     val mapFile = remember<File?>(uiState.currentRegion) {
         uiState.externalFilesDir?.let { File(it, uiState.currentRegion.fileName) }
@@ -204,9 +210,11 @@ fun MapViewContainer(
             MapControls(
                 isTrackingActive = uiState.isTrackingActive,
                 isEcoActive = isEcoActive,
+                currentLocation = gpsLocation,
                 stats = stats,
                 hasTrack = uiState.loadedTrackPoints.isNotEmpty(),
                 followGps = uiState.followGps,
+                mapCenter = uiState.targetPosition,
                 pois = uiState.pois,
                 context = context,
                 onStartTracking = onStartTracking,
@@ -219,7 +227,8 @@ fun MapViewContainer(
                 onToggleFollowGps = onToggleFollowGps,
                 onClearTrack = onClearTrack,
                 onHistoryClick = onHistoryClick,
-                onSettingsClick = onSettingsClick
+                onSettingsClick = onSettingsClick,
+                onCalculateRoute = onCalculateRoute
             )
         }
     )
@@ -356,8 +365,10 @@ fun DownloadOverlay(regionName: String, progress: Float) {
 fun MapControls(
     isTrackingActive: Boolean,
     isEcoActive: Boolean,
+    currentLocation: RoutePoint?,
     stats: TourStatistics,
     hasTrack: Boolean,
+    mapCenter: LatLong?,
     followGps: Boolean,
     pois: List<PoiEntity>,
     context: Context,
@@ -369,7 +380,8 @@ fun MapControls(
     onToggleFollowGps: () -> Unit,
     onClearTrack: () -> Unit,
     onHistoryClick: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onCalculateRoute: (Double, Double, Double, Double) -> Unit
 ) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -416,11 +428,18 @@ fun MapControls(
     }
 
     if (showPoiListDialog) {
+        //onCalculateRoute(52.2200, 10.4050, 52.3310, 10.4160)
         PoiListDialog(
             pois = pois,
             onDismiss = { showPoiListDialog = false },
             onPoiClick = onPoiClick,
-            onDeletePoi = onDeletePoi
+            onDeletePoi = onDeletePoi,
+            onCalculateRoute = { lat, lon ->
+                (currentLocation?.let { LatLong(it.latitude, it.longitude) } ?: mapCenter)?.let { start ->
+                    onCalculateRoute(start.latitude, start.longitude, lat, lon)
+                    showPoiListDialog = false
+                }
+            }
         )
     }
 
@@ -477,7 +496,9 @@ fun MapControlsContent(
     onPoiListClick: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        Row(modifier = Modifier.padding(5.dp).align(Alignment.TopCenter)) {
+        Row(modifier = Modifier
+            .padding(5.dp)
+            .align(Alignment.TopCenter)) {
             Button(onClick = {
                 if (isTrackingActive) {
                     onStopTracking()
@@ -564,7 +585,9 @@ fun MapControlsContent(
         if (isEcoActive) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
-                modifier = Modifier.padding(top = 60.dp).align(Alignment.TopCenter)
+                modifier = Modifier
+                    .padding(top = 60.dp)
+                    .align(Alignment.TopCenter)
             ) {
                 Text(stringResource(R.string.eco_mode_active), modifier = Modifier.padding(8.dp))
             }

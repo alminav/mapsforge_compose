@@ -6,7 +6,7 @@ import org.json.JSONArray
 data class RoutePoint(
     val latitude: Double,
     val longitude: Double,
-    val altitude: Double
+    val altitude: Double = 0.0
 )
 
 @Entity(tableName = "tours")
