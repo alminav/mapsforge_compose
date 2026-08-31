@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.TripOrigin
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,7 +23,8 @@ fun PoiListDialog(
     onDismiss: () -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onDeletePoi: (PoiEntity) -> Unit,
-    onCalculateRoute: (Double, Double) -> Unit
+    onCalculateRoute: (Double, Double) -> Unit,
+    onCalculateRoundtrip: (Double, Double) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -42,7 +44,10 @@ fun PoiListDialog(
                                 onDismiss()
                             },
                             onDelete = { onDeletePoi(poi) },
-                            onCalculate = { onCalculateRoute(poi.latitude, poi.longitude) }
+                            onCalculate = { onCalculateRoute(poi.latitude, poi.longitude) },
+                            onRoundtrip = {
+                                onCalculateRoundtrip(poi.latitude, poi.longitude)
+                            }
                         )
                     }
                 }
@@ -61,7 +66,8 @@ fun PoiListItem(
     poi: PoiEntity,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    onCalculate: () -> Unit
+    onCalculate: () -> Unit,
+    onRoundtrip: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -99,6 +105,13 @@ fun PoiListItem(
             Icon(
                 imageVector = Icons.Default.Navigation,
                 contentDescription = "POI Ziel",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(onClick = onRoundtrip) {
+            Icon(
+                imageVector = Icons.Default.TripOrigin,
+                contentDescription = "POI Roundtrip",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

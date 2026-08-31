@@ -2,6 +2,8 @@ package com.almica.mapsforge_compose
 
 import android.content.Context
 import androidx.core.content.edit
+import androidx.preference.PreferenceManager
+import com.almica.mapsforge_compose.gh.Const
 
 data class MapRegion(
     val id: String,
@@ -39,6 +41,8 @@ object RenderThemes {
 
 class SettingsRepository(context: Context) {
     private val sharedPreferences = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+    private val defaultPrefs = PreferenceManager.getDefaultSharedPreferences(context)
+    private val locomotionKeyString = context.getString(R.string.setting_locomotion)
 
     fun getSelectedRegionId(): String {
         return sharedPreferences.getString("selected_region_id", "niedersachsen") ?: "niedersachsen"
@@ -88,6 +92,30 @@ class SettingsRepository(context: Context) {
     fun getSelectedTheme(): RenderTheme {
         val id = getSelectedThemeId()
         return RenderThemes.AVAILABLE_THEMES.find { it.id == id } ?: RenderThemes.AVAILABLE_THEMES.last() // simplyhike is last
+    }
+
+    fun getGraphHopperFolder(): String? {
+        return sharedPreferences.getString("graphhopper_folder", null)
+    }
+
+    fun setGraphHopperFolder(folderName: String?) {
+        sharedPreferences.edit { putString("graphhopper_folder", folderName) }
+    }
+
+    fun getLocomotionKey(): String {
+        return defaultPrefs.getString(locomotionKeyString, Const.DEFAULT_LOCOMOTION) ?: Const.DEFAULT_LOCOMOTION
+    }
+
+    fun setLocomotionKey(key: String) {
+        defaultPrefs.edit { putString(locomotionKeyString, key) }
+    }
+
+    fun getRoundTripFactor(): Float {
+        return sharedPreferences.getFloat("round_trip_factor", 0.5f)
+    }
+
+    fun setRoundTripFactor(factor: Float) {
+        sharedPreferences.edit { putFloat("round_trip_factor", factor) }
     }
 
     fun getLastLatitude(): Double {

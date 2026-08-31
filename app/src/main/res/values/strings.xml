@@ -57,4 +57,7 @@
     <string name="gh_initialization">GH initialization %1$s</string>
     <string name="gh_not_initialzed">GH not initialzed</string>
     <string name="graphhopper_route_calculation">GH route calculation</string>
+    <string name="calculate">Berechnen</string>
+    <string name="roundtrip_factor">Roundtrip Factor\n0.1 … 1.0 small to large</string>
+    <string name="accept">Accept</string>
 </resources>

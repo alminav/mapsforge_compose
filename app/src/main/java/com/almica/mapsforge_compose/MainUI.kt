@@ -2,7 +2,6 @@ package com.almica.mapsforge_compose
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -31,13 +30,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.TextStyle
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.almica.mapsforge_compose.gh.GhHelper.Locomotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.mapsforge.core.model.LatLong
+import org.mapsforge.map.android.view.MapView
 import timber.log.Timber
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
@@ -50,6 +53,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val isEcoActive by viewModel.isEcoMode.collectAsStateWithLifecycle()
     
     val context = LocalContext.current
+    val resources = LocalResources.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val trackingStoppedMessage = stringResource(R.string.tracking_stopped) // Ensure this exists in strings.xml
@@ -96,7 +100,36 @@ fun MainScreen(viewModel: MainViewModel) {
                 onHistoryClick = { viewModel.setScreen(AppScreen.HISTORY) },
                 onSettingsClick = { viewModel.setScreen(AppScreen.SETTINGS) },
                 onCalculateRoute = { sLat, sLon, eLat, eLon ->
+                    scope.launch {
+                        snackbarHostState.currentSnackbarData?.dismiss()
+
+                        val folder = uiState.selectedGraphHopperFolder
+                        val locomotionKey = uiState.selectedLocomotionKey
+                        if (folder != null) {
+                            val desc = resources.getString(Locomotion.fromKey(locomotionKey).descriptionRes)
+                            snackbarHostState.showSnackbar(
+                                message = "$folder $desc",
+                                duration = SnackbarDuration.Short
+                            )
+                        }
+                    }
                     viewModel.calculateRoute(context, sLat, sLon, eLat, eLon)
+                },
+                onCalculateRoundtrip = { sLat, sLon, eLat, eLon ->
+                    scope.launch {
+                        snackbarHostState.currentSnackbarData?.dismiss()
+
+                        val folder = uiState.selectedGraphHopperFolder
+                        val locomotionKey = uiState.selectedLocomotionKey
+                        if (folder != null) {
+                            val desc = resources.getString(Locomotion.fromKey(locomotionKey).descriptionRes)
+                            snackbarHostState.showSnackbar(
+                                message = "$folder $desc",
+                                duration = SnackbarDuration.Short
+                            )
+                        }
+                    }
+                    viewModel.calculateRoundtrip(context, sLat, sLon, eLat, eLon)
                 }
             )
         },
@@ -129,13 +162,15 @@ fun MainScreen(viewModel: MainViewModel) {
                 onThemeFileSelected = { uri ->
                     viewModel.importThemeFile(context, uri)
                 },
-                onResetTheme = {
-                    viewModel.resetTheme()
-                },
                 onThemeSelected = { themeId ->
                     viewModel.selectBuiltInTheme(themeId)
                 },
-                currentThemeFile = uiState.themeFile
+                ghFolders = uiState.graphHopperFolders,
+                selectedGhFolder = uiState.selectedGraphHopperFolder,
+                onGhFolderSelected = { viewModel.selectGraphHopperFolder(it) },
+                onGhZipImported = { viewModel.importGraphHopperZip(context, it) },
+                selectedLocomotionKey = uiState.selectedLocomotionKey,
+                onLocomotionSelected = { viewModel.selectLocomotion(it) }
             )
         }
     )
@@ -183,7 +218,8 @@ fun MapViewContainer(
     onPoiClick: (PoiEntity) -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onCalculateRoute: (Double, Double, Double, Double) -> Unit
+    onCalculateRoute: (Double, Double, Double, Double) -> Unit,
+    onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit
 ) {
     val mapFile = remember<File?>(uiState.currentRegion) {
         uiState.externalFilesDir?.let { File(it, uiState.currentRegion.fileName) }
@@ -228,7 +264,8 @@ fun MapViewContainer(
                 onClearTrack = onClearTrack,
                 onHistoryClick = onHistoryClick,
                 onSettingsClick = onSettingsClick,
-                onCalculateRoute = onCalculateRoute
+                onCalculateRoute = onCalculateRoute,
+                onCalculateRoundtrip = onCalculateRoundtrip
             )
         }
     )
@@ -254,7 +291,7 @@ fun MapViewContainerContent(
     followGps: Boolean,
     mapControls: @Composable () -> Unit
 ) {
-    val mapViewReference = remember { mutableStateOf<org.mapsforge.map.android.view.MapView?>(null) }
+    val mapViewReference = remember { mutableStateOf<MapView?>(null) }
     var isMoving by remember { mutableStateOf(false) }
 
     // Detect movement to show crosshair when not following GPS
@@ -381,7 +418,8 @@ fun MapControls(
     onClearTrack: () -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onCalculateRoute: (Double, Double, Double, Double) -> Unit
+    onCalculateRoute: (Double, Double, Double, Double) -> Unit,
+    onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit
 ) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -406,7 +444,8 @@ fun MapControls(
                 TextField(
                     value = label,
                     onValueChange = { label = it },
-                    placeholder = { Text("Name des POI") }
+                    placeholder = { Text("Name des POI") },
+                    textStyle = MaterialTheme.typography.titleLarge
                 )
             },
             confirmButton = {
@@ -435,8 +474,16 @@ fun MapControls(
             onPoiClick = onPoiClick,
             onDeletePoi = onDeletePoi,
             onCalculateRoute = { lat, lon ->
-                (currentLocation?.let { LatLong(it.latitude, it.longitude) } ?: mapCenter)?.let { start ->
+                (currentLocation?.let { LatLong(it.latitude, it.longitude) }
+                    ?: mapCenter)?.let { start ->
                     onCalculateRoute(start.latitude, start.longitude, lat, lon)
+                    showPoiListDialog = false
+                }
+            },
+            onCalculateRoundtrip = { lat, lon ->
+                (currentLocation?.let { LatLong(it.latitude, it.longitude) }
+                    ?: mapCenter)?.let { start ->
+                    onCalculateRoundtrip(start.latitude, start.longitude, lat, lon)
                     showPoiListDialog = false
                 }
             }

@@ -21,6 +21,7 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import java.util.zip.ZipInputStream
 import kotlin.time.Duration.Companion.milliseconds
 
 data class MainUiState(
@@ -37,7 +38,11 @@ data class MainUiState(
     val followGps: Boolean = true,
     val targetPosition: LatLong? = null,
     val zoomLevel: Int = 12,
-    val externalFilesDir: File? = null
+    val externalFilesDir: File? = null,
+    val graphHopperFolders: List<String> = emptyList(),
+    val selectedGraphHopperFolder: String? = null,
+    val selectedLocomotionKey: String = "1.1",
+    val roundTripFactor: Float = 0.5f
 )
 
 class MainViewModel(
@@ -49,6 +54,7 @@ class MainViewModel(
 ) : AndroidViewModel(application) {
 
     private val themeDir = externalFilesDir?.resolve("themes")
+    private val ghRootDir = externalFilesDir?.resolve(Const.GH_ROOT_FOLDER)
     private var saveJob: Job? = null
 
     private val _uiState = MutableStateFlow(
@@ -61,7 +67,11 @@ class MainViewModel(
             targetPosition = if (settingsRepository.getLastLatitude() != 0.0) {
                 LatLong(settingsRepository.getLastLatitude(), settingsRepository.getLastLongitude())
             } else null,
-            zoomLevel = settingsRepository.getLastZoom()
+            zoomLevel = settingsRepository.getLastZoom(),
+            graphHopperFolders = getGraphHopperFoldersList(),
+            selectedGraphHopperFolder = settingsRepository.getGraphHopperFolder(),
+            selectedLocomotionKey = settingsRepository.getLocomotionKey(),
+            roundTripFactor = settingsRepository.getRoundTripFactor()
         )
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -249,21 +259,102 @@ class MainViewModel(
             poiDb.poiDao().deletePoi(poi)
         }
     }
+
+    private fun getGraphHopperFoldersList(): List<String> {
+        return ghRootDir?.listFiles { file -> file.isDirectory }?.map { it.name }?.sorted() ?: emptyList()
+    }
+
+    fun selectGraphHopperFolder(folderName: String) {
+        settingsRepository.setGraphHopperFolder(folderName)
+        _uiState.update { it.copy(selectedGraphHopperFolder = folderName) }
+    }
+
+    fun selectLocomotion(key: String) {
+        settingsRepository.setLocomotionKey(key)
+        _uiState.update { it.copy(selectedLocomotionKey = key) }
+    }
+
+    fun setRoundTripFactor(factor: Float) {
+        settingsRepository.setRoundTripFactor(factor)
+        _uiState.update { it.copy(roundTripFactor = factor) }
+    }
+
+    fun importGraphHopperZip(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val rootDir = ghRootDir ?: return@withContext
+                    rootDir.mkdirs()
+
+                    // Try to get filename to create a subfolder if needed
+                    val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst()) cursor.getString(nameIndex) else null
+                    } ?: UUID.randomUUID().toString()
+                    
+                    val folderName = fileName.substringBeforeLast(".")
+                    val targetDir = File(rootDir, folderName)
+                    targetDir.mkdirs()
+
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        ZipInputStream(input).use { zipInput ->
+                            var entry = zipInput.nextEntry
+                            while (entry != null) {
+                                val newFile = File(targetDir, entry.name)
+                                if (entry.isDirectory) {
+                                    newFile.mkdirs()
+                                } else {
+                                    newFile.parentFile?.mkdirs()
+                                    FileOutputStream(newFile).use { fos ->
+                                        zipInput.copyTo(fos)
+                                    }
+                                }
+                                zipInput.closeEntry()
+                                entry = zipInput.nextEntry
+                            }
+                        }
+                    }
+                    Timber.i("Extracted GHZ to ${targetDir.absolutePath}")
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to import GraphHopper GHZ")
+                }
+            }
+            _uiState.update { it.copy(graphHopperFolders = getGraphHopperFoldersList()) }
+        }
+    }
     
     fun getExternalFilesDir() = externalFilesDir
     
     fun getSettingsRepository() = settingsRepository
     fun calculateRoute(context: Context, startLat: Double, startLon: Double, stopLat: Double, stopLon: Double) {
-        val ghRootFolder = externalFilesDir?.let { File(it, Const.GH_ROOT_FOLDER) }
-        val ghDefaultFolder = ghRootFolder?.let { File(it, "n52e0103d") }
+        val folderName = settingsRepository.getGraphHopperFolder() ?: "n52e0103d"
+        val ghFolder = ghRootDir?.resolve(folderName)
         viewModelScope.launch {
             val result = GhHelper.ghCalc(
                 context,
-                ghDefaultFolder,
+                ghFolder,
                 startLat,
                 startLon,
                 stopLat,
                 stopLon
+            )
+            if (result.success) {
+                setLoadedTrackPoints(result.points)
+            }
+        }
+    }
+    fun calculateRoundtrip(context: Context, startLat: Double, startLon: Double, stopLat: Double, stopLon: Double) {
+        val folderName = settingsRepository.getGraphHopperFolder() ?: "n52e0103d"
+        val ghFolder = ghRootDir?.resolve(folderName)
+        viewModelScope.launch {
+            val result = GhHelper.ghCalc(
+                context,
+                ghFolder,
+                startLat,
+                startLon,
+                stopLat,
+                stopLon,
+                true, settingsRepository.getRoundTripFactor()
             )
             if (result.success) {
                 setLoadedTrackPoints(result.points)
