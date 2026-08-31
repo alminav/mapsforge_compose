@@ -35,6 +35,8 @@ import java.util.*
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Polyline
+import com.almica.mapsforge_compose.TourUtils.simplifyToTargetCount
 
 enum class TourSortOption {
     DATE_DESC, NAME_ASC, DISTANCE_DESC, DISTANCE_ASC, PROXIMITY_ASC
@@ -308,13 +310,18 @@ fun TourHistoryScreen(
                             scope.launch {
                                 db.tourDao().updateTour(tour.copy(name = newName))
                             }
-                        },
-                            onExportKml = {
+                        }, onExportKml = {
                                 val exportName = if (tour.name == null) "tour_${tour.id}.kml" else
                                     if (tour.name.endsWith(".kml")) tour.name else "${tour.name}.kml"
                                 tourToExport = tour
                                 //exportLauncher.launch("tour_${tour.id}.kml")
                                 exportLauncher.launch(exportName)
+                            },
+                            onSimplify = {
+                                val simplifiedPoints = tour.routePoints.simplifyToTargetCount(512)
+                                scope.launch {
+                                    db.tourDao().updateTour(tour.copy(routePoints = simplifiedPoints))
+                                }
                             }
                         )
                     }
@@ -349,7 +356,8 @@ fun TourHistoryItem(
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onRename: (String) -> Unit,
-    onExportKml: () -> Unit
+    onExportKml: () -> Unit,
+    onSimplify: () -> Unit
 ) {
     val dateString = remember(tour.timestamp) {
         SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(tour.timestamp))
@@ -409,6 +417,22 @@ fun TourHistoryItem(
                         },
                         leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) }
                     )
+                    if (tour.routePoints.size > 512) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.tour_menu_simplify)) },
+                            onClick = {
+                                expanded = false
+                                onSimplify()
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Polyline,
+                                    contentDescription = null
+                                )
+                            }
+                        )
+                    }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.tour_menu_delete)) },
@@ -475,6 +499,7 @@ fun TourHistoryItemPreview() {
         onClick = {},
         onDelete = {},
         onRename = {},
-        onExportKml = {}
+        onExportKml = {},
+        onSimplify = {}
     )
 }

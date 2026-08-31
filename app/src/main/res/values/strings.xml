@@ -9,6 +9,7 @@
 
     <string name="tour_menu_import">Aus KML importieren</string>
     <string name="tour_menu_export">Als KML exportieren</string>
+    <string name="tour_menu_simplify">Simplify</string>
     <string name="tour_menu_delete">Löschen</string>
     <string name="tour_export_success">Tour erfolgreich exportiert</string>
     <string name="tour_export_error">Fehler beim Exportieren</string>
