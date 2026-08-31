@@ -37,12 +37,19 @@ fun MapsforgeMapView(
     currentLocation: RoutePoint?,
     loadedTrackPoints: List<RoutePoint>,
     activeTrackPoints: List<RoutePoint>,
+    pois: List<PoiEntity> = emptyList(),
     followGps: Boolean = true,
     state: MapsforgeMapState = remember { MapsforgeMapState() },
     modifier: Modifier = Modifier,
-    onMapViewReady: (MapView) -> Unit = {}
+    onMapViewReady: (MapView) -> Unit = {},
+    onCenterChanged: (LatLong) -> Unit = {},
+    onZoomChanged: (Int) -> Unit = {},
+    onPoiClick: (PoiEntity) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val currentOnCenterChanged by rememberUpdatedState(onCenterChanged)
+    val currentOnZoomChanged by rememberUpdatedState(onZoomChanged)
+    val currentOnPoiClick by rememberUpdatedState(onPoiClick)
     
     val tileCache = remember {
         AndroidUtil.createTileCache(
@@ -64,6 +71,20 @@ fun MapsforgeMapView(
             MapView(ctx).apply {
                 isClickable = true
                 mapZoomControls.setShowMapZoomControls(true)
+
+                model.mapViewPosition.addObserver {
+                    val newCenter = model.mapViewPosition.center
+                    val newZoom = model.mapViewPosition.zoomLevel.toInt()
+                    
+                    if (state.center != newCenter) {
+                        state.center = newCenter
+                        currentOnCenterChanged(newCenter)
+                    }
+                    if (state.zoomLevel != newZoom) {
+                        state.zoomLevel = newZoom
+                        currentOnZoomChanged(newZoom)
+                    }
+                }
 
                 if (mapFile?.exists() == true) {
                     val mapDataStore = MapFile(mapFile)
@@ -90,8 +111,10 @@ fun MapsforgeMapView(
             }
         },
         update = { view ->
-            // Sync state to view
-            view.model.mapViewPosition.setZoomLevel(state.zoomLevel.toByte())
+            // Sync state to view only if it's different to avoid feedback loops
+            if (view.model.mapViewPosition.zoomLevel.toInt() != state.zoomLevel) {
+                view.model.mapViewPosition.setZoomLevel(state.zoomLevel.toByte())
+            }
 
             // Update GPS location
             currentLocation?.let {
@@ -110,6 +133,9 @@ fun MapsforgeMapView(
             // Update Polylines
             updatePolyline(view, loadedPolyline, loadedTrackPoints)
             updatePolyline(view, activePolyline, activeTrackPoints)
+
+            // Update POIs
+            updatePoiMarkers(view, pois, currentOnPoiClick)
             
             // Update Theme
             val trl = view.layerManager.layers.filterIsInstance<TileRendererLayer>().firstOrNull()
@@ -153,7 +179,7 @@ private fun createGpsMarker(
         setStyle(org.mapsforge.core.graphics.Style.FILL)
     }
     canvas.drawCircle(size / 2, size / 2, radius, paint)
-    return Marker(LatLong(0.0, 0.0), bitmap, 0, 0)
+    return Marker(LatLong(0.0, 0.0), bitmap, -size / 2, -size / 2)
 }
 
 private fun createPolyline(
@@ -187,4 +213,57 @@ private fun updatePolyline(map: MapView, polyline: Polyline, points: List<RouteP
     if (!layers.contains(polyline)) {
         layers.add(polyline)
     }
+}
+
+private fun updatePoiMarkers(map: MapView, pois: List<PoiEntity>, onPoiClick: (PoiEntity) -> Unit) {
+    val layers = map.layerManager.layers
+    
+    // Remove old POI markers
+    val existingPoiMarkers = layers.filterIsInstance<PoiMarker>()
+    layers.removeAll(existingPoiMarkers)
+
+    // Add new markers
+    pois.forEach { poi ->
+        val marker = createPoiMarker(poi, onPoiClick, map)
+        layers.add(marker)
+    }
+}
+
+private class PoiMarker(
+    latLong: LatLong, 
+    bitmap: org.mapsforge.core.graphics.Bitmap, 
+    val poi: PoiEntity,
+    private val onClick: (PoiEntity) -> Unit,
+    private val mapView: MapView
+) : Marker(latLong, bitmap, 0, 0) {
+    override fun onTap(tapLatLong: LatLong?, layerXY: org.mapsforge.core.model.Point?, tapXY: org.mapsforge.core.model.Point?): Boolean {
+        if (contains(layerXY, tapXY, mapView)) {
+            onClick(poi)
+            return true
+        }
+        return false
+    }
+}
+
+private fun createPoiMarker(poi: PoiEntity, onPoiClick: (PoiEntity) -> Unit, mapView: MapView): PoiMarker {
+    val size = 48
+    val radius = 20
+    val bitmap = AndroidGraphicFactory.INSTANCE.createBitmap(size, size)
+    val canvas = AndroidGraphicFactory.INSTANCE.createCanvas()
+    canvas.setBitmap(bitmap)
+    
+    val paint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+        setColor(Color.RED)
+        setStyle(org.mapsforge.core.graphics.Style.FILL)
+    }
+    canvas.drawCircle(size / 2, size / 2, radius, paint)
+    
+    val borderPaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+        setColor(Color.BLACK)
+        strokeWidth = 3f
+        setStyle(org.mapsforge.core.graphics.Style.STROKE)
+    }
+    canvas.drawCircle(size / 2, size / 2, radius, borderPaint)
+    
+    return PoiMarker(LatLong(poi.latitude, poi.longitude), bitmap, poi, onPoiClick, mapView)
 }

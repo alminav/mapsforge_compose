@@ -88,4 +88,28 @@ class SettingsRepository(context: Context) {
         val id = getSelectedThemeId()
         return RenderThemes.AVAILABLE_THEMES.find { it.id == id } ?: RenderThemes.AVAILABLE_THEMES.last() // simplyhike is last
     }
+
+    fun getLastLatitude(): Double {
+        return sharedPreferences.getFloat("last_latitude", 0.0f).toDouble()
+    }
+
+    fun setLastLatitude(lat: Double) {
+        sharedPreferences.edit { putFloat("last_latitude", lat.toFloat()) }
+    }
+
+    fun getLastLongitude(): Double {
+        return sharedPreferences.getFloat("last_longitude", 0.0f).toDouble()
+    }
+
+    fun setLastLongitude(lon: Double) {
+        sharedPreferences.edit { putFloat("last_longitude", lon.toFloat()) }
+    }
+
+    fun getLastZoom(): Int {
+        return sharedPreferences.getInt("last_zoom", 12)
+    }
+
+    fun setLastZoom(zoom: Int) {
+        sharedPreferences.edit { putInt("last_zoom", zoom) }
+    }
 }

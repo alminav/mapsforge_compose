@@ -8,7 +8,14 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -16,6 +23,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.LocationDisabled
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.AddLocation
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
@@ -25,10 +35,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.mapsforge.core.model.LatLong
 import timber.log.Timber
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
@@ -64,10 +76,23 @@ fun MainScreen(viewModel: MainViewModel) {
                 stats = tourStats,
                 isEcoActive = isEcoActive,
                 onMove = viewModel::setTargetPosition,
+                onZoomChanged = viewModel::setZoomLevel,
                 onStartTracking = { viewModel.startTracking(context) },
                 onStopTracking = { viewModel.stopTracking(context) },
+                onAddPoi = viewModel::addPoi,
+                onDeletePoi = viewModel::deletePoi,
                 onToggleFollowGps = { viewModel.setFollowGps(!uiState.followGps) },
                 onClearTrack = { viewModel.setLoadedTrackPoints(emptyList()) },
+                onPoiClick = { poi ->
+                    viewModel.setTargetPosition(LatLong(poi.latitude, poi.longitude))
+                    scope.launch {
+                        snackbarHostState.currentSnackbarData?.dismiss()
+                        snackbarHostState.showSnackbar(
+                            message = poi.label,
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                },
                 onHistoryClick = { viewModel.setScreen(AppScreen.HISTORY) },
                 onSettingsClick = { viewModel.setScreen(AppScreen.SETTINGS) }
             )
@@ -143,10 +168,14 @@ fun MapViewContainer(
     stats: TourStatistics,
     isEcoActive: Boolean,
     onMove: (LatLong?) -> Unit,
+    onZoomChanged: (Int) -> Unit,
     onStartTracking: () -> Unit,
     onStopTracking: () -> Unit,
+    onAddPoi: (String, String?, LatLong) -> Unit,
+    onDeletePoi: (PoiEntity) -> Unit,
     onToggleFollowGps: () -> Unit,
     onClearTrack: () -> Unit,
+    onPoiClick: (PoiEntity) -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
@@ -164,8 +193,12 @@ fun MapViewContainer(
         gpsLocation = gpsLocation,
         loadedTrackPoints = uiState.loadedTrackPoints,
         activeTrackPoints = uiState.activeTrackPoints,
+        pois = uiState.pois,
         onMove = { latLong -> onMove(latLong) },
+        onZoomChanged = { zoom -> onZoomChanged(zoom) },
+        onPoiClick = onPoiClick,
         targetPosition = uiState.targetPosition,
+        zoomLevel = uiState.zoomLevel,
         followGps = uiState.followGps,
         mapControls = {
             MapControls(
@@ -174,9 +207,15 @@ fun MapViewContainer(
                 stats = stats,
                 hasTrack = uiState.loadedTrackPoints.isNotEmpty(),
                 followGps = uiState.followGps,
+                pois = uiState.pois,
                 context = context,
                 onStartTracking = onStartTracking,
                 onStopTracking = onStopTracking,
+                onAddPoi = { label, desc ->
+                    uiState.targetPosition?.let { onAddPoi(label, desc, it) }
+                },
+                onDeletePoi = onDeletePoi,
+                onPoiClick = onPoiClick,
                 onToggleFollowGps = onToggleFollowGps,
                 onClearTrack = onClearTrack,
                 onHistoryClick = onHistoryClick,
@@ -197,12 +236,28 @@ fun MapViewContainerContent(
     gpsLocation: RoutePoint?,
     loadedTrackPoints: List<RoutePoint>,
     activeTrackPoints: List<RoutePoint>,
+    pois: List<PoiEntity> = emptyList(),
     onMove: (LatLong) -> Unit,
+    onZoomChanged: (Int) -> Unit,
+    onPoiClick: (PoiEntity) -> Unit,
     targetPosition: LatLong?,
+    zoomLevel: Int,
     followGps: Boolean,
     mapControls: @Composable () -> Unit
 ) {
     val mapViewReference = remember { mutableStateOf<org.mapsforge.map.android.view.MapView?>(null) }
+    var isMoving by remember { mutableStateOf(false) }
+
+    // Detect movement to show crosshair when not following GPS
+    LaunchedEffect(targetPosition) {
+        if (!followGps && targetPosition != null) {
+            isMoving = true
+            delay(1500.milliseconds) // Keep visible for 1.5s after last movement
+            isMoving = false
+        } else {
+            isMoving = false
+        }
+    }
 
     // Move map when targetPosition changes externally
     LaunchedEffect(targetPosition) {
@@ -211,29 +266,46 @@ fun MapViewContainerContent(
         }
     }
 
-    // Update the position whenever the map center changes
-    LaunchedEffect(mapViewReference.value) {
-        mapViewReference.value?.model?.mapViewPosition?.let { position ->
-            onMove(position.center)
-        }
-    }
-
     if (isDownloading) {
         DownloadOverlay(regionDisplayName, if (mapFileExists) 1F else downloadProgress)
     } else {
         Box(modifier = Modifier.fillMaxSize()) {
+            val updateTargetPosition = {
+                mapViewReference.value?.model?.mapViewPosition?.center?.let { onMove(it) }
+            }
+
             MapsforgeMapView(
                 mapFile = if (mapFileExists) mapFile else null,
                 themeXmlFile = themeFile,
                 currentLocation = gpsLocation,
                 loadedTrackPoints = loadedTrackPoints,
                 activeTrackPoints = activeTrackPoints,
+                pois = pois,
                 followGps = followGps,
+                state = remember { 
+                    MapsforgeMapState(
+                        initialZoom = zoomLevel,
+                        initialCenter = targetPosition ?: LatLong(0.0, 0.0)
+                    ) 
+                },
                 onMapViewReady = { mv ->
                     mapViewReference.value = mv
-                    onMove(mv.model.mapViewPosition.center)
-                }
+                    updateTargetPosition()
+                },
+                onCenterChanged = onMove,
+                onZoomChanged = onZoomChanged,
+                onPoiClick = onPoiClick
             )
+
+            // Crosshair overlay
+            AnimatedVisibility(
+                visible = isMoving,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                MapCrosshair()
+            }
 
             // Zoom Buttons
             Column(
@@ -243,12 +315,18 @@ fun MapViewContainerContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SmallFloatingActionButton(
-                    onClick = { mapViewReference.value?.model?.mapViewPosition?.zoomIn() }
+                    onClick = {
+                        mapViewReference.value?.model?.mapViewPosition?.zoomIn()
+                        updateTargetPosition()
+                    }
                 ) {
                     Icon(Icons.Default.Add, contentDescription = stringResource(R.string.zoom_in))
                 }
                 SmallFloatingActionButton(
-                    onClick = { mapViewReference.value?.model?.mapViewPosition?.zoomOut() }
+                    onClick = {
+                        mapViewReference.value?.model?.mapViewPosition?.zoomOut()
+                        updateTargetPosition()
+                    }
                 ) {
                     Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
                 }
@@ -281,9 +359,13 @@ fun MapControls(
     stats: TourStatistics,
     hasTrack: Boolean,
     followGps: Boolean,
+    pois: List<PoiEntity>,
     context: Context,
     onStartTracking: () -> Unit,
     onStopTracking: () -> Unit,
+    onAddPoi: (String, String?) -> Unit,
+    onDeletePoi: (PoiEntity) -> Unit,
+    onPoiClick: (PoiEntity) -> Unit,
     onToggleFollowGps: () -> Unit,
     onClearTrack: () -> Unit,
     onHistoryClick: () -> Unit,
@@ -298,6 +380,48 @@ fun MapControls(
         if (locationGranted) {
             onStartTracking()
         }
+    }
+
+    var showAddPoiDialog by remember { mutableStateOf(false) }
+    var showPoiListDialog by remember { mutableStateOf(false) }
+
+    if (showAddPoiDialog) {
+        var label by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAddPoiDialog = false },
+            title = { Text("POI hinzufügen") },
+            text = {
+                TextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    placeholder = { Text("Name des POI") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (label.isNotBlank()) {
+                        onAddPoi(label, null)
+                        showAddPoiDialog = false
+                    }
+                }) {
+                    Text("Hinzufügen")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddPoiDialog = false }) {
+                    Text("Abbrechen")
+                }
+            }
+        )
+    }
+
+    if (showPoiListDialog) {
+        PoiListDialog(
+            pois = pois,
+            onDismiss = { showPoiListDialog = false },
+            onPoiClick = onPoiClick,
+            onDeletePoi = onDeletePoi
+        )
     }
 
     MapControlsContent(
@@ -330,7 +454,9 @@ fun MapControls(
         onHistoryClick = onHistoryClick,
         onSettingsClick = onSettingsClick,
         onClearTrack = onClearTrack,
-        onToggleFollowGps = onToggleFollowGps
+        onToggleFollowGps = onToggleFollowGps,
+        onAddPoiClick = { showAddPoiDialog = true },
+        onPoiListClick = { showPoiListDialog = true }
     )
 }
 
@@ -346,7 +472,9 @@ fun MapControlsContent(
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onClearTrack: () -> Unit,
-    onToggleFollowGps: () -> Unit
+    onToggleFollowGps: () -> Unit,
+    onAddPoiClick: () -> Unit,
+    onPoiListClick: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.padding(5.dp).align(Alignment.TopCenter)) {
@@ -368,6 +496,41 @@ fun MapControlsContent(
                 Text(stringResource(R.string.menu_settings))
             }
 
+        }
+
+        // POI Dropdown Menu
+        var showPoiMenu by remember { mutableStateOf(false) }
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 8.dp, top = 50.dp)
+        ) {
+            SmallFloatingActionButton(
+                onClick = { showPoiMenu = true }
+            ) {
+                Icon(Icons.Default.Place, contentDescription = "POI Menü")
+            }
+            DropdownMenu(
+                expanded = showPoiMenu,
+                onDismissRequest = { showPoiMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("POI hinzufügen") },
+                    onClick = {
+                        showPoiMenu = false
+                        onAddPoiClick()
+                    },
+                    leadingIcon = { Icon(Icons.Default.AddLocation, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("POI Liste") },
+                    onClick = {
+                        showPoiMenu = false
+                        onPoiListClick()
+                    },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
+                )
+            }
         }
 
         // GPS Follow Toggle
@@ -416,6 +579,35 @@ fun MapControlsContent(
     }
 }
 
+@Composable
+fun MapCrosshair(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(40.dp)) {
+        val strokeWidth = 2.dp.toPx()
+        val color = Color.Black.copy(alpha = 0.7f)
+        
+        // Horizontal line
+        drawLine(
+            color = color,
+            start = Offset(0f, size.height / 2),
+            end = Offset(size.width, size.height / 2),
+            strokeWidth = strokeWidth
+        )
+        // Vertical line
+        drawLine(
+            color = color,
+            start = Offset(size.width / 2, 0f),
+            end = Offset(size.width / 2, size.height),
+            strokeWidth = strokeWidth
+        )
+        // Inner circle
+        drawCircle(
+            color = color,
+            radius = 4.dp.toPx(),
+            style = Stroke(width = strokeWidth)
+        )
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
@@ -438,7 +630,10 @@ fun MainScreenPreview() {
                 ),
                 activeTrackPoints = emptyList(),
                 onMove = {},
+                onZoomChanged = {},
+                onPoiClick = {},
                 targetPosition = null,
+                zoomLevel = 12,
                 followGps = true,
                 mapControls = {
                     MapControlsContent(
@@ -457,7 +652,9 @@ fun MainScreenPreview() {
                         onHistoryClick = {},
                         onSettingsClick = {},
                         onClearTrack = {},
-                        onToggleFollowGps = {}
+                        onToggleFollowGps = {},
+                        onAddPoiClick = {},
+                        onPoiListClick = {}
                     )
                 }
             )

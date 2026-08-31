@@ -10,12 +10,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         val settingsRepository = SettingsRepository(this)
-        val db = TourDatabase.getDatabase(this)
+        val tourDb = TourDatabase.getDatabase(this)
+        val poiDb = PoiDatabase.getDatabase(this)
         val externalFilesDir = getExternalFilesDir(null)
 
         setContent {
             val viewModel: MainViewModel = viewModel(
-                factory = MainViewModelFactory(application, settingsRepository, db, externalFilesDir)
+                factory = MainViewModelFactory(application, settingsRepository, tourDb, poiDb, externalFilesDir)
             )
             MainScreen(viewModel)
         }

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -267,6 +268,23 @@ fun TourHistoryScreen(
                                 )
                             }
                         }
+                    }
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    val toursToDelete = tourList.filter { it.routePoints.size < 20 }
+                                    toursToDelete.forEach { db.tourDao().deleteTour(it) }
+                                    if (toursToDelete.isNotEmpty()) {
+                                        snackbarHostState.showSnackbar(
+                                            "Removed ${toursToDelete.size} short tours (< 20 points)"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.CleaningServices, contentDescription = "Remove short tours")
                     }
                 }
             }
