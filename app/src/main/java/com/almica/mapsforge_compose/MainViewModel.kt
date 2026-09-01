@@ -45,7 +45,8 @@ data class MainUiState(
     val graphHopperFolders: List<String> = emptyList(),
     val selectedGraphHopperFolder: String? = null,
     val selectedLocomotionKey: String = "1.1",
-    val roundTripFactor: Float = 0.5f
+    val roundTripFactor: Float = 0.5f,
+    val downloadMessage: String? = null
 )
 
 class MainViewModel(
@@ -102,8 +103,10 @@ class MainViewModel(
             _uiState.map { it.currentRegion }
                 .distinctUntilChanged()
                 .collect { region ->
+                    Timber.d("Collector: currentRegion changed to ${region.displayName}")
+                    // The collector will handle automated downloads when region changes
+                    // setRegion handles manual/explicit triggers
                     val state = _uiState.value
-                    // Only download if we are using the region's file (either explicitly or by default)
                     if (state.selectedMapFileName == null || state.selectedMapFileName == region.fileName) {
                         downloadMapAndTheme(region)
                     }
@@ -136,30 +139,53 @@ class MainViewModel(
     }
 
     private fun downloadMapAndTheme(region: MapRegion) {
-        val mapDir = mapDir ?: return
+        Timber.d("downloadMapAndTheme called for region: ${region.displayName}")
+        if (_uiState.value.isDownloading) {
+            Timber.d("Download already in progress, skipping")
+            return
+        }
+        val mapDir = mapDir ?: run {
+            Timber.w("mapDir is null, cannot download map")
+            return
+        }
         val mapFile = mapDir.resolve(region.fileName)
+        Timber.d("Target map file: ${mapFile.absolutePath}")
+        
+        // Set downloading state immediately to avoid race conditions
+        _uiState.update { it.copy(
+            isDownloading = true,
+            downloadProgress = 0f,
+            downloadMessage = getApplication<Application>().getString(R.string.map_loading_progress, region.displayName)
+        ) }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isDownloading = true, downloadProgress = 0f) }
-            
-            val mapSuccess = MapDownloader.downloadMapIfMissing(
-                urlStr = region.downloadUrl,
-                targetFile = mapFile
-            ) { progress ->
-                _uiState.update { it.copy(downloadProgress = progress) }
-            }
-            
-            themeDir?.let { ThemeDownloader.extractThemesIfMissing(getApplication(), it) }
-            val downloadedTheme = getThemeFile()
-            Timber.i("Theme file exists: ${downloadedTheme?.path}")
+            try {
+                // Perform file check in background
+                val isValid = withContext(Dispatchers.IO) { MapDownloader.isMapFileValid(mapFile) }
+                _uiState.update { it.copy(mapFileExists = isValid) }
 
-            _uiState.update {
-                it.copy(
-                    isDownloading = false,
-                    mapFileExists = mapSuccess,
-                    themeFile = downloadedTheme,
-                    mapFiles = getMapFilesList() // Refresh map files after potential download
-                )
+                val mapSuccess = MapDownloader.downloadMapIfMissing(
+                    urlStr = region.downloadUrl,
+                    targetFile = mapFile
+                ) { progress ->
+                    _uiState.update { it.copy(downloadProgress = progress) }
+                }
+                
+                themeDir?.let { ThemeDownloader.extractThemesIfMissing(getApplication(), it) }
+                val downloadedTheme = getThemeFile()
+                Timber.i("Theme file exists: ${downloadedTheme?.path}")
+
+                _uiState.update {
+                    it.copy(
+                        isDownloading = false,
+                        mapFileExists = mapSuccess,
+                        themeFile = downloadedTheme,
+                        mapFiles = getMapFilesList() // Refresh map files after potential download
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Unexpected error in download process")
+                _uiState.update { it.copy(isDownloading = false) }
             }
         }
     }
@@ -190,7 +216,15 @@ class MainViewModel(
     }
 
     fun setRegion(region: MapRegion) {
+        Timber.d("setRegion: ${region.displayName}")
         _uiState.update { it.copy(currentRegion = region) }
+        
+        // Ensure download is checked even if region didn't change (e.g. manual trigger)
+        val state = _uiState.value
+        Timber.d("Checking if download needed. selectedMapFileName: ${state.selectedMapFileName}, region file: ${region.fileName}")
+        
+        // Manual call to downloadMapAndTheme should be safe because it checks isDownloading
+        downloadMapAndTheme(region)
     }
 
     fun selectMapFile(fileName: String?) {
@@ -213,7 +247,11 @@ class MainViewModel(
 
     fun importMapFile(context: Context, uri: Uri) {
         viewModelScope.launch {
-            //_uiState.update { it.copy(isDownloading = true, downloadProgress = 0f) }
+            _uiState.update { it.copy(
+                isDownloading = true,
+                downloadProgress = -1f,
+                downloadMessage = getApplication<Application>().getString(R.string.map_loading_progress, "Import…")
+            ) }
             withContext(Dispatchers.IO) {
                 try {
                     val rootDir = mapDir ?: return@withContext
@@ -224,13 +262,14 @@ class MainViewModel(
                         if (cursor.moveToFirst()) cursor.getString(nameIndex) else null
                     } ?: UUID.randomUUID().toString().let { if (it.endsWith(".map")) it else "$it.map" }
 
+                    _uiState.update { it.copy(downloadMessage = getApplication<Application>().getString(R.string.map_loading_progress, fileName)) }
+
                     if (fileName.lowercase().endsWith(".zip")) {
                         context.contentResolver.openInputStream(uri)?.use { input ->
                             ZipInputStream(input).use { zipInput ->
                                 var entry = zipInput.nextEntry
                                 while (entry != null) {
                                     if (!entry.isDirectory && entry.name.lowercase().endsWith(".map")) {
-                                        // Extract the filename from the zip entry path to avoid nested directories
                                         val entryName = File(entry.name).name
                                         val targetFile = File(rootDir, entryName)
                                         FileOutputStream(targetFile).use { output ->
@@ -254,9 +293,10 @@ class MainViewModel(
                     }
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to import map file")
+                } finally {
+                    _uiState.update { it.copy(isDownloading = false, mapFiles = getMapFilesList()) }
                 }
             }
-            _uiState.update { it.copy(mapFiles = getMapFilesList()) }
         }
     }
 
@@ -306,12 +346,23 @@ class MainViewModel(
 
     fun importThemeFile(context: Context, uri: Uri) {
         viewModelScope.launch {
+            val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (cursor.moveToFirst()) cursor.getString(nameIndex) else null
+            } ?: "Theme"
+
+            _uiState.update { it.copy(
+                isDownloading = true,
+                downloadProgress = -1f,
+                downloadMessage = getApplication<Application>().getString(R.string.theme_import_progress, fileName)
+            ) }
             val file = withContext(Dispatchers.IO) {
                 try {
                     val targetDir = externalFilesDir?.resolve("themes/custom") ?: return@withContext null
                     targetDir.mkdirs()
-                    val fileName = "custom_theme.xml"
-                    val targetFile = File(targetDir, fileName)
+                    val targetFileName = "custom_theme.xml"
+                    val targetFile = File(targetDir, targetFileName)
+                    
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         FileOutputStream(targetFile).use { output ->
                             input.copyTo(output)
@@ -321,6 +372,8 @@ class MainViewModel(
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to import theme file")
                     null
+                } finally {
+                    _uiState.update { it.copy(isDownloading = false) }
                 }
             }
             setThemeFile(file)
@@ -369,9 +422,29 @@ class MainViewModel(
         return ghRootDir?.listFiles { file -> file.isDirectory }?.map { it.name }?.sorted() ?: emptyList()
     }
 
-    fun selectGraphHopperFolder(folderName: String) {
+    fun selectGraphHopperFolder(folderName: String?) {
         settingsRepository.setGraphHopperFolder(folderName)
         _uiState.update { it.copy(selectedGraphHopperFolder = folderName) }
+    }
+
+    fun deleteGraphHopperFolder(folderName: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val folder = ghRootDir?.resolve(folderName)
+                    if (folder?.exists() == true) {
+                        folder.deleteRecursively()
+                        Timber.i("Deleted GraphHopper folder: $folderName")
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to delete GraphHopper folder: $folderName")
+                }
+            }
+            if (settingsRepository.getGraphHopperFolder() == folderName) {
+                selectGraphHopperFolder(null)
+            }
+            refreshMapFiles()
+        }
     }
 
     fun selectLocomotion(key: String) {
@@ -386,16 +459,22 @@ class MainViewModel(
 
     fun importGraphHopperZip(context: Context, uri: Uri) {
         viewModelScope.launch {
+            _uiState.update { it.copy(
+                isDownloading = true,
+                downloadProgress = -1f,
+                downloadMessage = getApplication<Application>().getString(R.string.gh_import_progress, "GHZ")
+            ) }
             withContext(Dispatchers.IO) {
                 try {
                     val rootDir = ghRootDir ?: return@withContext
                     rootDir.mkdirs()
 
-                    // Try to get filename to create a subfolder if needed
                     val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                         val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                         if (cursor.moveToFirst()) cursor.getString(nameIndex) else null
                     } ?: UUID.randomUUID().toString()
+                    
+                    _uiState.update { it.copy(downloadMessage = getApplication<Application>().getString(R.string.gh_import_progress, fileName)) }
                     
                     val folderName = fileName.substringBeforeLast(".")
                     val targetDir = File(rootDir, folderName)
@@ -422,9 +501,10 @@ class MainViewModel(
                     Timber.i("Extracted GHZ to ${targetDir.absolutePath}")
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to import GraphHopper GHZ")
+                } finally {
+                    _uiState.update { it.copy(isDownloading = false, graphHopperFolders = getGraphHopperFoldersList()) }
                 }
             }
-            _uiState.update { it.copy(graphHopperFolders = getGraphHopperFoldersList()) }
         }
     }
     

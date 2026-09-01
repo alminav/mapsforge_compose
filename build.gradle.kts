@@ -3,4 +3,11 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.compose.compiler) apply false
     alias(libs.plugins.ksp) apply false
+    id("idea")
+}
+
+configure<org.gradle.plugins.ide.idea.model.IdeaModel> {
+    module {
+        excludeDirs.add(file("backups"))
+    }
 }

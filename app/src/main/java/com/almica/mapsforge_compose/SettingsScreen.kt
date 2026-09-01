@@ -40,6 +40,7 @@ fun SettingsScreen(
     ghFolders: List<String> = emptyList(),
     selectedGhFolder: String? = null,
     onGhFolderSelected: (String) -> Unit = {},
+    onGhFolderDeleted: (String) -> Unit = {},
     onGhZipImported: (Uri) -> Unit = {},
     selectedLocomotionKey: String = "1.1",
     onLocomotionSelected: (String) -> Unit = {},
@@ -47,7 +48,8 @@ fun SettingsScreen(
     selectedMapFileName: String? = null,
     onMapFileSelected: (String?) -> Unit = {},
     onMapFileDeleted: (String) -> Unit = {},
-    onMapImported: (Uri) -> Unit = {}
+    onMapImported: (Uri) -> Unit = {},
+    onDownloadMap: (MapRegion) -> Unit = {}
 ) {
     SettingsScreenContent(
         initialSelectedFileName = selectedMapFileName ?: repository.getSelectedRegion().fileName,
@@ -70,6 +72,7 @@ fun SettingsScreen(
         onThemeFileSelected = onThemeFileSelected,
         onThemeSelected = onThemeSelected,
         onGhFolderSelected = onGhFolderSelected,
+        onGhFolderDeleted = onGhFolderDeleted,
         onGhZipImported = onGhZipImported,
         onLocomotionSelected = onLocomotionSelected,
         onRoundtripFactorSaved = { repository.setRoundTripFactor(it) },
@@ -79,7 +82,8 @@ fun SettingsScreen(
             onMapFileSelected(it)
         },
         onMapFileDeleted = onMapFileDeleted,
-        onMapImported = onMapImported
+        onMapImported = onMapImported,
+        onDownloadMap = onDownloadMap
     )
 }
 
@@ -102,13 +106,15 @@ fun SettingsScreenContent(
     onThemeFileSelected: (Uri) -> Unit,
     onThemeSelected: (String) -> Unit,
     onGhFolderSelected: (String) -> Unit,
+    onGhFolderDeleted: (String) -> Unit,
     onGhZipImported: (Uri) -> Unit,
     onLocomotionSelected: (String) -> Unit,
     initialRoundtripFactor: Float,
     onRoundtripFactorSaved: (Float) -> Unit,
     onMapFileSelected: (String?) -> Unit,
     onMapFileDeleted: (String) -> Unit,
-    onMapImported: (Uri) -> Unit
+    onMapImported: (Uri) -> Unit,
+    onDownloadMap: (MapRegion) -> Unit
 ) {
     BackHandler(onBack = onBack)
     var selectedFileName by remember(selectedMapFileName) { mutableStateOf(initialSelectedFileName) }
@@ -121,6 +127,7 @@ fun SettingsScreenContent(
     var showAltitudeDialog by remember { mutableStateOf(false) }
     var showRoundtripDialog by remember { mutableStateOf(false) }
     var showMapSelectionDialog by remember { mutableStateOf(false) }
+    var showDownloadDialog by remember { mutableStateOf(false) }
 
     val themePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -152,6 +159,17 @@ fun SettingsScreenContent(
             onMapDeleted = onMapFileDeleted,
             onImportMap = {
                 mapPickerLauncher.launch("*/*")
+                showMapSelectionDialog = false
+            }
+        )
+    }
+
+    if (showDownloadDialog) {
+        DownloadMapDialog(
+            onDismissRequest = { showDownloadDialog = false },
+            onRegionSelected = { region ->
+                onDownloadMap(region)
+                showDownloadDialog = false
             }
         )
     }
@@ -253,6 +271,7 @@ fun SettingsScreenContent(
                     selectedMapFileName = selectedMapFileName,
                     onMapSelectionClick = { showMapSelectionDialog = true },
                     onMapFileReset = { onMapFileSelected(null) },
+                    onDownloadClick = { showDownloadDialog = true },
                     selectedThemeId = selectedThemeId,
                     themeFilePath = themeFilePath,
                     onThemeSelected = {
@@ -274,6 +293,7 @@ fun SettingsScreenContent(
                         selectedGhFolderId = it
                         onGhFolderSelected(it)
                     },
+                    onGhFolderDeleted = onGhFolderDeleted,
                     onImportGhZip = { ghZipPickerLauncher.launch("*/*") }
                 )
             }
@@ -346,6 +366,7 @@ fun MapSettingsTab(
     selectedMapFileName: String?,
     onMapSelectionClick: () -> Unit,
     onMapFileReset: () -> Unit,
+    onDownloadClick: () -> Unit,
     selectedThemeId: String,
     themeFilePath: String?,
     onThemeSelected: (String) -> Unit
@@ -358,8 +379,7 @@ fun MapSettingsTab(
         item {
             Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onMapSelectionClick() },
+                    .fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Row(
@@ -367,7 +387,7 @@ fun MapSettingsTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f).clickable { onMapSelectionClick() }) {
                         Text(text = "Kartenwahl", style = MaterialTheme.typography.bodyLarge)
                         Text(
                             text = if (selectedMapFileName != null) "Gewählt: $selectedMapFileName" else "Keine manuelle Karte gewählt",
@@ -377,6 +397,9 @@ fun MapSettingsTab(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        TextButton(onClick = onDownloadClick) {
+                            Text("Download")
+                        }
                         if (selectedMapFileName != null) {
                             TextButton(onClick = onMapFileReset) {
                                 Text("Reset")
@@ -433,8 +456,32 @@ fun RoutingSettingsTab(
     ghFolders: List<String>,
     selectedGhFolderId: String?,
     onGhFolderSelected: (String) -> Unit,
+    onGhFolderDeleted: (String) -> Unit,
     onImportGhZip: () -> Unit
 ) {
+    var folderToDelete by remember { mutableStateOf<String?>(null) }
+
+    if (folderToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { folderToDelete = null },
+            title = { Text(stringResource(R.string.delete_gh_folder_title)) },
+            text = { Text(stringResource(R.string.delete_gh_folder_message, folderToDelete ?: "")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    folderToDelete?.let { onGhFolderDeleted(it) }
+                    folderToDelete = null
+                }) {
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { folderToDelete = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -529,7 +576,7 @@ fun RoutingSettingsTab(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        } else if (ghFolders.size > 5) {
+        } else {
             items(ghFolders) { folder ->
                 val selected = selectedGhFolderId == folder
                 Card(
@@ -548,39 +595,20 @@ fun RoutingSettingsTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(text = folder, style = MaterialTheme.typography.bodyLarge)
-                        if (selected) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                        Text(text = folder, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (selected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            IconButton(onClick = { folderToDelete = folder }) {
+                                Icon(imageVector = Icons.Default.Delete, contentDescription = "Löschen")
+                            }
                         }
-                    }
-                }
-            }
-        } else {
-            item {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(ghFolders) { folder ->
-                        val selected = selectedGhFolderId == folder
-                        FilterChip(
-                            selected = selected,
-                            onClick = { onGhFolderSelected(folder) },
-                            label = { Text(folder) },
-                            leadingIcon = if (selected) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                    )
-                                }
-                            } else null
-                        )
                     }
                 }
             }
@@ -677,6 +705,44 @@ fun MapSelectionDialog(
     )
 }
 
+@Composable
+fun DownloadMapDialog(
+    onDismissRequest: () -> Unit,
+    onRegionSelected: (MapRegion) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text("Karte herunterladen") },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(MapRegions.AVAILABLE_REGIONS.filter { it.downloadUrl.isNotEmpty() }) { region ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onRegionSelected(region) },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = region.displayName, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Abbrechen")
+            }
+        }
+    )
+}
+
 @Preview(showBackground = true)
 @Composable
 fun SettingsScreenPreview() {
@@ -705,11 +771,13 @@ fun SettingsScreenPreview() {
         onThemeFileSelected = {},
         onThemeSelected = {},
         onGhFolderSelected = {},
+        onGhFolderDeleted = {},
         onGhZipImported = {},
         onLocomotionSelected = {},
         onRoundtripFactorSaved = {},
         onMapFileSelected = {},
         onMapFileDeleted = {},
-        onMapImported = {}
+        onMapImported = {},
+        onDownloadMap = {}
     )
 }

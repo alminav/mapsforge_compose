@@ -33,7 +33,9 @@
     <string name="tour_sort_by_distance">Nach Distanz</string>
     <string name="tour_sort_by_proximity">Tour Entfernung</string>
 
-    <string name="map_loading_progress">%1$s Karte wird geladen…</string>
+    <string name="map_loading_progress">Karte wird geladen: %1$s…</string>
+    <string name="gh_import_progress">GraphHopper Daten werden importiert: %1$s…</string>
+    <string name="theme_import_progress">Render Theme wird importiert: %1$s…</string>
     <string name="tracking_start">Start ⏺️</string>
     <string name="tracking_stop">Stop ⏹️</string>
     <string name="menu_archive">Archiv 📜</string>
@@ -60,4 +62,8 @@
     <string name="calculate">Berechnen</string>
     <string name="roundtrip_factor">Roundtrip Factor\n0.1 … 1.0 small to large</string>
     <string name="accept">Accept</string>
+    <string name="delete_gh_folder_title">Routing-Daten löschen</string>
+    <string name="delete_gh_folder_message">Möchten Sie den Ordner \'%1$s\' und alle enthaltenen Daten wirklich löschen?</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="delete">Löschen</string>
 </resources>

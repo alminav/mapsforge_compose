@@ -21,21 +21,32 @@ object MapDownloader {
     }
 
     suspend fun downloadMapIfMissing(urlStr: String, targetFile: File, onProgress: (Float) -> Unit): Boolean {
-        Timber.i("Downloading map to ${targetFile.absolutePath}")
+        Timber.i("downloadMapIfMissing: url=$urlStr, target=${targetFile.absolutePath}")
         if (isMapFileValid(targetFile)) {
+            Timber.i("Map file already exists and is valid, skipping download")
             return true
+        }
+        
+        if (urlStr.isEmpty()) {
+            Timber.w("Download URL is empty, cannot download")
+            return false
         }
 
         return withContext(Dispatchers.IO) {
             val tempFile = File(targetFile.parent, targetFile.name + ".tmp")
             try {
-                if (tempFile.exists()) tempFile.delete()
+                Timber.d("Starting download from $urlStr to ${tempFile.absolutePath}")
+                if (tempFile.exists()) {
+                    Timber.d("Deleting existing temp file")
+                    tempFile.delete()
+                }
                 
                 val url = URL(urlStr)
                 val connection = url.openConnection()
                 connection.connect()
 
                 val fileLength = connection.contentLength
+                Timber.d("File length: $fileLength")
                 val input = connection.getInputStream()
                 val output = tempFile.outputStream()
 
@@ -55,14 +66,17 @@ object MapDownloader {
                 output.close()
                 input.close()
 
+                Timber.d("Download finished, renaming temp file to ${targetFile.name}")
                 if (tempFile.renameTo(targetFile)) {
+                    Timber.i("Map download successful: ${targetFile.name}")
                     true
                 } else {
+                    Timber.e("Failed to rename temp file to ${targetFile.name}")
                     tempFile.delete()
                     false
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "Error during map download")
                 if (tempFile.exists()) tempFile.delete()
                 if (targetFile.exists()) targetFile.delete()
                 false

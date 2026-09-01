@@ -11,10 +11,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -71,6 +73,10 @@ fun MainScreen(viewModel: MainViewModel) {
 
     MainScreenContent(
         currentScreen = uiState.currentScreen,
+        isDownloading = uiState.isDownloading,
+        downloadMessage = uiState.downloadMessage ?: "",
+        downloadProgress = uiState.downloadProgress,
+        mapFileExists = uiState.mapFileExists,
         snackbarHostState = snackbarHostState,
         mapViewContainer = {
             MapViewContainer(
@@ -168,11 +174,17 @@ fun MainScreen(viewModel: MainViewModel) {
                 ghFolders = uiState.graphHopperFolders,
                 selectedGhFolder = uiState.selectedGraphHopperFolder,
                 onGhFolderSelected = { viewModel.selectGraphHopperFolder(it) },
+                onGhFolderDeleted = { viewModel.deleteGraphHopperFolder(it) },
                 onGhZipImported = { viewModel.importGraphHopperZip(context, it) },
                 selectedLocomotionKey = uiState.selectedLocomotionKey,
                 onLocomotionSelected = { viewModel.selectLocomotion(it) },
                 mapFiles = uiState.mapFiles,
                 selectedMapFileName = uiState.selectedMapFileName,
+                onDownloadMap = { region ->
+                    viewModel.selectMapFile(null)
+                    viewModel.setRegion(region)
+                    viewModel.setScreen(AppScreen.MAP)
+                },
                 onMapFileSelected = { viewModel.selectMapFile(it) },
                 onMapImported = { viewModel.importMapFile(context, it) },
                 onMapFileDeleted = {
@@ -190,6 +202,10 @@ fun MainScreen(viewModel: MainViewModel) {
 @Composable
 fun MainScreenContent(
     currentScreen: AppScreen,
+    isDownloading: Boolean,
+    downloadMessage: String,
+    downloadProgress: Float,
+    mapFileExists: Boolean,
     snackbarHostState: SnackbarHostState,
     mapViewContainer: @Composable () -> Unit,
     tourHistoryScreen: @Composable () -> Unit,
@@ -206,6 +222,10 @@ fun MainScreenContent(
                 AppScreen.MAP -> mapViewContainer()
                 AppScreen.HISTORY -> tourHistoryScreen()
                 AppScreen.SETTINGS -> settingsScreen()
+            }
+
+            if (isDownloading) {
+                DownloadOverlay(downloadMessage, if (mapFileExists) 1F else downloadProgress)
             }
         }
     }
@@ -241,9 +261,6 @@ fun MapViewContainer(
     val effectiveMapFileExists = remember(mapFile) { mapFile?.exists() == true }
 
     MapViewContainerContent(
-        isDownloading = uiState.isDownloading,
-        regionDisplayName = uiState.selectedMapFileName ?: uiState.currentRegion.displayName,
-        downloadProgress = uiState.downloadProgress,
         mapFileExists = effectiveMapFileExists,
         mapFile = mapFile,
         themeFile = uiState.themeFile,
@@ -288,9 +305,6 @@ fun MapViewContainer(
 
 @Composable
 fun MapViewContainerContent(
-    isDownloading: Boolean,
-    regionDisplayName: String,
-    downloadProgress: Float,
     mapFileExists: Boolean,
     mapFile: File?,
     themeFile: File?,
@@ -327,89 +341,114 @@ fun MapViewContainerContent(
         }
     }
 
-    if (isDownloading) {
-        DownloadOverlay(regionDisplayName, if (mapFileExists) 1F else downloadProgress)
-    } else {
-        Box(modifier = Modifier.fillMaxSize()) {
-            val updateTargetPosition = {
-                mapViewReference.value?.model?.mapViewPosition?.center?.let { onMove(it) }
-            }
-
-            MapsforgeMapView(
-                mapFile = if (mapFileExists) mapFile else null,
-                themeXmlFile = themeFile,
-                currentLocation = gpsLocation,
-                loadedTrackPoints = loadedTrackPoints,
-                activeTrackPoints = activeTrackPoints,
-                pois = pois,
-                followGps = followGps,
-                state = remember { 
-                    MapsforgeMapState(
-                        initialZoom = zoomLevel,
-                        initialCenter = targetPosition ?: LatLong(0.0, 0.0)
-                    ) 
-                },
-                onMapViewReady = { mv ->
-                    mapViewReference.value = mv
-                    updateTargetPosition()
-                },
-                onCenterChanged = onMove,
-                onZoomChanged = onZoomChanged,
-                onPoiClick = onPoiClick
-            )
-
-            // Crosshair overlay
-            AnimatedVisibility(
-                visible = isMoving,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier.align(Alignment.Center)
-            ) {
-                MapCrosshair()
-            }
-
-            // Zoom Buttons
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SmallFloatingActionButton(
-                    onClick = {
-                        mapViewReference.value?.model?.mapViewPosition?.zoomIn()
-                        updateTargetPosition()
-                    }
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.zoom_in))
-                }
-                SmallFloatingActionButton(
-                    onClick = {
-                        mapViewReference.value?.model?.mapViewPosition?.zoomOut()
-                        updateTargetPosition()
-                    }
-                ) {
-                    Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
-                }
-            }
-            mapControls()
+    Box(modifier = Modifier.fillMaxSize()) {
+        val updateTargetPosition = {
+            mapViewReference.value?.model?.mapViewPosition?.center?.let { onMove(it) }
         }
+
+        MapsforgeMapView(
+            mapFile = if (mapFileExists) mapFile else null,
+            themeXmlFile = themeFile,
+            currentLocation = gpsLocation,
+            loadedTrackPoints = loadedTrackPoints,
+            activeTrackPoints = activeTrackPoints,
+            pois = pois,
+            followGps = followGps,
+            state = remember { 
+                MapsforgeMapState(
+                    initialZoom = zoomLevel,
+                    initialCenter = targetPosition ?: LatLong(0.0, 0.0)
+                ) 
+            },
+            onMapViewReady = { mv ->
+                mapViewReference.value = mv
+                updateTargetPosition()
+            },
+            onCenterChanged = onMove,
+            onZoomChanged = onZoomChanged,
+            onPoiClick = onPoiClick
+        )
+
+        // Crosshair overlay
+        AnimatedVisibility(
+            visible = isMoving,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            MapCrosshair()
+        }
+
+        // Zoom Buttons
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SmallFloatingActionButton(
+                onClick = {
+                    mapViewReference.value?.model?.mapViewPosition?.zoomIn()
+                    updateTargetPosition()
+                }
+            ) {
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.zoom_in))
+            }
+            SmallFloatingActionButton(
+                onClick = {
+                    mapViewReference.value?.model?.mapViewPosition?.zoomOut()
+                    updateTargetPosition()
+                }
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
+            }
+        }
+        mapControls()
     }
 }
 
 @Composable
-fun DownloadOverlay(regionName: String, progress: Float) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+fun DownloadOverlay(message: String, progress: Float) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.4f)),
+        contentAlignment = Alignment.Center
     ) {
-        Text(stringResource(R.string.map_loading_progress, regionName))
-        Spacer(modifier = Modifier.height(16.dp))
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxWidth(0.8f)
-        )
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .padding(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                if (progress >= 0f) {
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -698,12 +737,13 @@ fun MapCrosshair(modifier: Modifier = Modifier) {
 fun MainScreenPreview() {
     MainScreenContent(
         currentScreen = AppScreen.MAP,
+        isDownloading = false,
+        downloadMessage = "Map loading...",
+        downloadProgress = 0f,
+        mapFileExists = true,
         snackbarHostState = remember { SnackbarHostState() },
         mapViewContainer = {
             MapViewContainerContent(
-                isDownloading = false,
-                regionDisplayName = "World",
-                downloadProgress = 0f,
                 mapFileExists = true,
                 mapFile = File("world.map"),
                 themeFile = null,
