@@ -27,7 +27,7 @@ import kotlin.time.Duration.Companion.milliseconds
 data class MainUiState(
     val currentScreen: AppScreen = AppScreen.MAP,
     val currentRegion: MapRegion,
-    val isDownloading: Boolean = true,
+    val isDownloading: Boolean = false,
     val downloadProgress: Float = 0f,
     val mapFileExists: Boolean = false,
     val themeFile: File? = null,
@@ -39,6 +39,9 @@ data class MainUiState(
     val targetPosition: LatLong? = null,
     val zoomLevel: Int = 12,
     val externalFilesDir: File? = null,
+    val mapDir: File? = null,
+    val mapFiles: List<String> = emptyList(),
+    val selectedMapFileName: String? = null,
     val graphHopperFolders: List<String> = emptyList(),
     val selectedGraphHopperFolder: String? = null,
     val selectedLocomotionKey: String = "1.1",
@@ -54,6 +57,7 @@ class MainViewModel(
 ) : AndroidViewModel(application) {
 
     private val themeDir = externalFilesDir?.resolve("themes")
+    private val mapDir = externalFilesDir?.resolve(Const.MAPFOLDER)
     private val ghRootDir = externalFilesDir?.resolve(Const.GH_ROOT_FOLDER)
     private var saveJob: Job? = null
 
@@ -63,11 +67,14 @@ class MainViewModel(
             followGps = settingsRepository.getFollowGps(),
             mapFileExists = externalFilesDir?.resolve(settingsRepository.getSelectedRegion().fileName)?.exists() ?: false,
             externalFilesDir = externalFilesDir,
+            mapDir = mapDir,
             themeFile = getThemeFile(),
             targetPosition = if (settingsRepository.getLastLatitude() != 0.0) {
                 LatLong(settingsRepository.getLastLatitude(), settingsRepository.getLastLongitude())
             } else null,
             zoomLevel = settingsRepository.getLastZoom(),
+            mapFiles = getMapFilesList(),
+            selectedMapFileName = settingsRepository.getSelectedMapFileName(),
             graphHopperFolders = getGraphHopperFoldersList(),
             selectedGraphHopperFolder = settingsRepository.getGraphHopperFolder(),
             selectedLocomotionKey = settingsRepository.getLocomotionKey(),
@@ -95,7 +102,11 @@ class MainViewModel(
             _uiState.map { it.currentRegion }
                 .distinctUntilChanged()
                 .collect { region ->
-                    downloadMapAndTheme(region)
+                    val state = _uiState.value
+                    // Only download if we are using the region's file (either explicitly or by default)
+                    if (state.selectedMapFileName == null || state.selectedMapFileName == region.fileName) {
+                        downloadMapAndTheme(region)
+                    }
                 }
         }
 
@@ -104,6 +115,10 @@ class MainViewModel(
             poiDb.poiDao().getAllPois().collect { poiList ->
                 _uiState.update { it.copy(pois = poiList) }
             }
+        }
+
+        viewModelScope.launch {
+            copyWorldMapIfMissing()
         }
     }
 
@@ -121,8 +136,8 @@ class MainViewModel(
     }
 
     private fun downloadMapAndTheme(region: MapRegion) {
-        val externalDir = externalFilesDir ?: return
-        val mapFile = externalDir.resolve(region.fileName)
+        val mapDir = mapDir ?: return
+        val mapFile = mapDir.resolve(region.fileName)
 
         viewModelScope.launch {
             _uiState.update { it.copy(isDownloading = true, downloadProgress = 0f) }
@@ -137,12 +152,35 @@ class MainViewModel(
             themeDir?.let { ThemeDownloader.extractThemesIfMissing(getApplication(), it) }
             val downloadedTheme = getThemeFile()
             Timber.i("Theme file exists: ${downloadedTheme?.path}")
+
             _uiState.update {
                 it.copy(
                     isDownloading = false,
                     mapFileExists = mapSuccess,
-                    themeFile = downloadedTheme
+                    themeFile = downloadedTheme,
+                    mapFiles = getMapFilesList() // Refresh map files after potential download
                 )
+            }
+        }
+    }
+
+    private suspend fun copyWorldMapIfMissing() {
+        withContext(Dispatchers.IO) {
+            try {
+                val targetDir = mapDir ?: return@withContext
+                val worldMapFile = File(targetDir, "world.map")
+                if (!MapDownloader.isMapFileValid(worldMapFile)) {
+                    targetDir.mkdirs()
+                    getApplication<Application>().assets.open("world.map").use { input ->
+                        FileOutputStream(worldMapFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Timber.i("Copied world.map from assets to ${worldMapFile.absolutePath}")
+                }
+            } catch (e: Exception) {
+                // Fail silently if asset is not present or copy fails, as it's an optional background map
+                Timber.w("Could not copy world.map from assets: ${e.message}")
             }
         }
     }
@@ -153,6 +191,73 @@ class MainViewModel(
 
     fun setRegion(region: MapRegion) {
         _uiState.update { it.copy(currentRegion = region) }
+    }
+
+    fun selectMapFile(fileName: String?) {
+        settingsRepository.setSelectedMapFileName(fileName)
+        _uiState.update { it.copy(selectedMapFileName = fileName) }
+    }
+
+    private fun getMapFilesList(): List<String> {
+        return mapDir?.listFiles { file ->
+            file.isFile && file.extension.equals("map", ignoreCase = true)
+        }?.map { it.name }?.sorted() ?: emptyList()
+    }
+
+    fun refreshMapFiles() {
+        _uiState.update { it.copy(
+            mapFiles = getMapFilesList(),
+            graphHopperFolders = getGraphHopperFoldersList()
+        ) }
+    }
+
+    fun importMapFile(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            //_uiState.update { it.copy(isDownloading = true, downloadProgress = 0f) }
+            withContext(Dispatchers.IO) {
+                try {
+                    val rootDir = mapDir ?: return@withContext
+                    rootDir.mkdirs()
+
+                    val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst()) cursor.getString(nameIndex) else null
+                    } ?: UUID.randomUUID().toString().let { if (it.endsWith(".map")) it else "$it.map" }
+
+                    if (fileName.lowercase().endsWith(".zip")) {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            ZipInputStream(input).use { zipInput ->
+                                var entry = zipInput.nextEntry
+                                while (entry != null) {
+                                    if (!entry.isDirectory && entry.name.lowercase().endsWith(".map")) {
+                                        // Extract the filename from the zip entry path to avoid nested directories
+                                        val entryName = File(entry.name).name
+                                        val targetFile = File(rootDir, entryName)
+                                        FileOutputStream(targetFile).use { output ->
+                                            zipInput.copyTo(output)
+                                        }
+                                        Timber.i("Extracted map to ${targetFile.absolutePath}")
+                                    }
+                                    zipInput.closeEntry()
+                                    entry = zipInput.nextEntry
+                                }
+                            }
+                        }
+                    } else {
+                        val targetFile = File(rootDir, fileName)
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            FileOutputStream(targetFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        Timber.i("Imported map to ${targetFile.absolutePath}")
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to import map file")
+                }
+            }
+            _uiState.update { it.copy(mapFiles = getMapFilesList()) }
+        }
     }
 
     fun setFollowGps(enabled: Boolean) {

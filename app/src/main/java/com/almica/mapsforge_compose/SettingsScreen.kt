@@ -12,16 +12,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.almica.mapsforge_compose.gh.GhHelper
 import com.almica.mapsforge_compose.gh.RoundtripValuePickerDialog
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,10 +42,15 @@ fun SettingsScreen(
     onGhFolderSelected: (String) -> Unit = {},
     onGhZipImported: (Uri) -> Unit = {},
     selectedLocomotionKey: String = "1.1",
-    onLocomotionSelected: (String) -> Unit = {}
+    onLocomotionSelected: (String) -> Unit = {},
+    mapFiles: List<String> = emptyList(),
+    selectedMapFileName: String? = null,
+    onMapFileSelected: (String?) -> Unit = {},
+    onMapFileDeleted: (String) -> Unit = {},
+    onMapImported: (Uri) -> Unit = {}
 ) {
     SettingsScreenContent(
-        initialSelectedRegionId = repository.getSelectedRegionId(),
+        initialSelectedFileName = selectedMapFileName ?: repository.getSelectedRegion().fileName,
         initialSelectedThemeId = repository.getSelectedThemeId(),
         initialAltitudeCorrection = repository.getAltitudeCorrection(),
         initialRoundtripFactor = repository.getRoundTripFactor(),
@@ -50,29 +59,34 @@ fun SettingsScreen(
         ghFolders = ghFolders,
         selectedGhFolder = selectedGhFolder,
         selectedLocomotionKey = selectedLocomotionKey,
+        mapFiles = mapFiles,
+        selectedMapFileName = selectedMapFileName,
         onBack = onBack,
         onAltitudeCorrectionSaved = { repository.setAltitudeCorrection(it) },
         onFollowGpsToggled = {
             repository.setFollowGps(it)
             onFollowGpsChanged(it)
         },
-        onRegionSelected = { regionId ->
-            repository.setSelectedRegionId(regionId)
-            onRegionChanged()
-        },
         onThemeFileSelected = onThemeFileSelected,
         onThemeSelected = onThemeSelected,
         onGhFolderSelected = onGhFolderSelected,
         onGhZipImported = onGhZipImported,
         onLocomotionSelected = onLocomotionSelected,
-        onRoundtripFactorSaved = { repository.setRoundTripFactor(it) }
+        onRoundtripFactorSaved = { repository.setRoundTripFactor(it) },
+        onMapFileSelected = {
+            repository.setSelectedMapFileName(it)
+            onRegionChanged()
+            onMapFileSelected(it)
+        },
+        onMapFileDeleted = onMapFileDeleted,
+        onMapImported = onMapImported
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreenContent(
-    initialSelectedRegionId: String,
+    initialSelectedFileName: String?,
     initialSelectedThemeId: String,
     initialAltitudeCorrection: Float,
     initialFollowGps: Boolean,
@@ -80,10 +94,11 @@ fun SettingsScreenContent(
     ghFolders: List<String>,
     selectedGhFolder: String?,
     selectedLocomotionKey: String,
+    mapFiles: List<String>,
+    selectedMapFileName: String?,
     onBack: () -> Unit,
     onAltitudeCorrectionSaved: (Float) -> Unit,
     onFollowGpsToggled: (Boolean) -> Unit,
-    onRegionSelected: (String) -> Unit,
     onThemeFileSelected: (Uri) -> Unit,
     onThemeSelected: (String) -> Unit,
     onGhFolderSelected: (String) -> Unit,
@@ -91,9 +106,12 @@ fun SettingsScreenContent(
     onLocomotionSelected: (String) -> Unit,
     initialRoundtripFactor: Float,
     onRoundtripFactorSaved: (Float) -> Unit,
+    onMapFileSelected: (String?) -> Unit,
+    onMapFileDeleted: (String) -> Unit,
+    onMapImported: (Uri) -> Unit
 ) {
     BackHandler(onBack = onBack)
-    var selectedId by remember { mutableStateOf(initialSelectedRegionId) }
+    var selectedFileName by remember(selectedMapFileName) { mutableStateOf(initialSelectedFileName) }
     var selectedThemeId by remember { mutableStateOf(initialSelectedThemeId) }
     var selectedGhFolderId by remember { mutableStateOf(selectedGhFolder) }
     var locomotionKey by remember { mutableStateOf(selectedLocomotionKey) }
@@ -102,6 +120,7 @@ fun SettingsScreenContent(
     var followGps by remember { mutableStateOf(initialFollowGps) }
     var showAltitudeDialog by remember { mutableStateOf(false) }
     var showRoundtripDialog by remember { mutableStateOf(false) }
+    var showMapSelectionDialog by remember { mutableStateOf(false) }
 
     val themePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -113,6 +132,28 @@ fun SettingsScreenContent(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { onGhZipImported(it) }
+    }
+
+    val mapPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { onMapImported(it) }
+    }
+
+    if (showMapSelectionDialog) {
+        MapSelectionDialog(
+            mapFiles = mapFiles,
+            selectedMapFileName = selectedMapFileName,
+            onDismissRequest = { showMapSelectionDialog = false },
+            onMapSelected = {
+                onMapFileSelected(it)
+                //showMapSelectionDialog = false
+            },
+            onMapDeleted = onMapFileDeleted,
+            onImportMap = {
+                mapPickerLauncher.launch("*/*")
+            }
+        )
     }
 
     if (showRoundtripDialog) {
@@ -163,258 +204,373 @@ fun SettingsScreenContent(
         )
     }
 
+    val pagerState = rememberPagerState(pageCount = { 3 })
+    val scope = rememberCoroutineScope()
+    val tabs = listOf("Allgemein", "Karten", "Routing")
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Einstellungen") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Schließen")
+            Column {
+                TopAppBar(
+                    title = { Text("Einstellungen") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Schließen")
+                        }
+                    }
+                )
+                SecondaryTabRow(selectedTabIndex = pagerState.currentPage) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = pagerState.currentPage == index,
+                            onClick = {
+                                scope.launch { pagerState.animateScrollToPage(index) }
+                            },
+                            text = { Text(title) }
+                        )
                     }
                 }
-            )
+            }
         }
     ) { innerPadding ->
-        LazyColumn(
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showAltitudeDialog = true },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(text = "Manuelle Höhenkorrektur", style = MaterialTheme.typography.bodyLarge)
-                            Text(text = "Aktueller Wert: $altitudeCorrection m", style = MaterialTheme.typography.bodySmall)
-                        }
+        ) { page ->
+            when (page) {
+                0 -> GeneralSettingsTab(
+                    altitudeCorrection = altitudeCorrection,
+                    onAltitudeClick = { showAltitudeDialog = true },
+                    followGps = followGps,
+                    onFollowGpsToggled = {
+                        onFollowGpsToggled(it)
+                        followGps = it
                     }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "Karte folgt GPS", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                text = "Die Karte wird automatisch auf Ihre aktuelle Position zentriert.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = followGps,
-                            onCheckedChange = {
-                                onFollowGpsToggled(it)
-                                followGps = it
-                            }
-                        )
-                    }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showRoundtripDialog = true },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(text = "Roundtrip Faktor", style = MaterialTheme.typography.bodyLarge)
-                            Text(text = "Aktueller Wert: $roundtripFactor", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-            
-            item {
-                Text(
-                    text = "Fortbewegungsmittel",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
+                )
+                1 -> MapSettingsTab(
+                    selectedMapFileName = selectedMapFileName,
+                    onMapSelectionClick = { showMapSelectionDialog = true },
+                    onMapFileReset = { onMapFileSelected(null) },
+                    selectedThemeId = selectedThemeId,
+                    themeFilePath = themeFilePath,
+                    onThemeSelected = {
+                        selectedThemeId = it
+                        onThemeSelected(it)
+                    },
+                )
+                2 -> RoutingSettingsTab(
+                    roundtripFactor = roundtripFactor,
+                    onRoundtripClick = { showRoundtripDialog = true },
+                    locomotionKey = locomotionKey,
+                    onLocomotionSelected = {
+                        locomotionKey = it
+                        onLocomotionSelected(it)
+                    },
+                    ghFolders = ghFolders,
+                    selectedGhFolderId = selectedGhFolderId,
+                    onGhFolderSelected = {
+                        selectedGhFolderId = it
+                        onGhFolderSelected(it)
+                    },
+                    onImportGhZip = { ghZipPickerLauncher.launch("*/*") }
                 )
             }
+        }
+    }
+}
 
-            item {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(GhHelper.Locomotion.entries) { locomotion ->
-                        val selected = locomotionKey == locomotion.key
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                locomotionKey = locomotion.key
-                                onLocomotionSelected(locomotion.key)
-                            },
-                            label = { Text(stringResource(locomotion.descriptionRes)) },
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(locomotion.iconRes),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                )
-                            },
-                            trailingIcon = if (selected) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                    )
-                                }
-                            } else null
-                        )
-                    }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-
-            item {
+@Composable
+fun GeneralSettingsTab(
+    altitudeCorrection: Float,
+    onAltitudeClick: () -> Unit,
+    followGps: Boolean,
+    onFollowGpsToggled: (Boolean) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onAltitudeClick() },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "GraphHopper Routing-Daten",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    TextButton(onClick = { ghZipPickerLauncher.launch("*/*") }) {
-                        Text("Import GHZ")
+                    Column {
+                        Text(text = "Höhenkorrektur", style = MaterialTheme.typography.bodyLarge)
+                        Text(text = "Aktueller Wert: $altitudeCorrection m", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
+        }
 
-            if (ghFolders.isEmpty()) {
-                item {
-                    Text(
-                        text = "Keine Routing-Daten gefunden. Importieren Sie eine GHZ-Datei.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Karte folgt GPS", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "Die Karte wird automatisch auf Ihre aktuelle Position zentriert.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = followGps,
+                        onCheckedChange = onFollowGpsToggled
                     )
                 }
-            } else if (ghFolders.size > 5) {
-                items(ghFolders) { folder ->
-                    val selected = selectedGhFolderId == folder
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectedGhFolderId = folder
-                                onGhFolderSelected(folder)
-                            },
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (selected) 
-                                MaterialTheme.colorScheme.primaryContainer 
-                            else 
-                                MaterialTheme.colorScheme.surfaceVariant
+            }
+        }
+    }
+}
+
+@Composable
+fun MapSettingsTab(
+    selectedMapFileName: String?,
+    onMapSelectionClick: () -> Unit,
+    onMapFileReset: () -> Unit,
+    selectedThemeId: String,
+    themeFilePath: String?,
+    onThemeSelected: (String) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onMapSelectionClick() },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Kartenwahl", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = if (selectedMapFileName != null) "Gewählt: $selectedMapFileName" else "Keine manuelle Karte gewählt",
+                            style = MaterialTheme.typography.bodySmall
                         )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = folder, style = MaterialTheme.typography.bodyLarge)
-                            if (selected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
+                        if (selectedMapFileName != null) {
+                            TextButton(onClick = onMapFileReset) {
+                                Text("Reset")
                             }
                         }
                     }
                 }
-            } else {
-                item {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+
+        item {
+            Text(
+                text = "Integriertes Theme wählen",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        item {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(RenderThemes.AVAILABLE_THEMES) { theme ->
+                    val selected = selectedThemeId == theme.id && themeFilePath == null
+                    FilterChip(
+                        selected = selected,
+                        onClick = { onThemeSelected(theme.id) },
+                        label = { Text(theme.displayName) },
+                        leadingIcon = if (selected) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            }
+                        } else null
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RoutingSettingsTab(
+    roundtripFactor: Float,
+    onRoundtripClick: () -> Unit,
+    locomotionKey: String,
+    onLocomotionSelected: (String) -> Unit,
+    ghFolders: List<String>,
+    selectedGhFolderId: String?,
+    onGhFolderSelected: (String) -> Unit,
+    onImportGhZip: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onRoundtripClick() },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(text = "Roundtrip Faktor", style = MaterialTheme.typography.bodyLarge)
+                        Text(text = "Aktueller Wert: $roundtripFactor", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+
+        item {
+            Text(
+                text = "Fortbewegungsmittel",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        item {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(GhHelper.Locomotion.entries) { locomotion ->
+                    val selected = locomotionKey == locomotion.key
+                    FilterChip(
+                        selected = selected,
+                        onClick = { onLocomotionSelected(locomotion.key) },
+                        label = { Text(stringResource(locomotion.descriptionRes)) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(locomotion.iconRes),
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        },
+                        trailingIcon = if (selected) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            }
+                        } else null
+                    )
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "GraphHopper Routing-Daten",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                TextButton(onClick = onImportGhZip) {
+                    Text("Import GHZ")
+                }
+            }
+        }
+
+        if (ghFolders.isEmpty()) {
+            item {
+                Text(
+                    text = "Keine Routing-Daten gefunden. Importieren Sie eine GHZ-Datei.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else if (ghFolders.size > 5) {
+            items(ghFolders) { folder ->
+                val selected = selectedGhFolderId == folder
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onGhFolderSelected(folder) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (selected)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        items(ghFolders) { folder ->
-                            val selected = selectedGhFolderId == folder
-                            FilterChip(
-                                selected = selected,
-                                onClick = {
-                                    selectedGhFolderId = folder
-                                    onGhFolderSelected(folder)
-                                },
-                                label = { Text(folder) },
-                                leadingIcon = if (selected) {
-                                    {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                        )
-                                    }
-                                } else null
+                        Text(text = folder, style = MaterialTheme.typography.bodyLarge)
+                        if (selected) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                     }
                 }
             }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-
-            item {
-                Text(
-                    text = "Integriertes Theme wählen",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
+        } else {
             item {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(RenderThemes.AVAILABLE_THEMES) { theme ->
-                        val selected = selectedThemeId == theme.id && themeFilePath == null
+                    items(ghFolders) { folder ->
+                        val selected = selectedGhFolderId == folder
                         FilterChip(
                             selected = selected,
-                            onClick = {
-                                selectedThemeId = theme.id
-                                onThemeSelected(theme.id)
-                            },
-                            label = { Text(theme.displayName) },
+                            onClick = { onGhFolderSelected(folder) },
+                            label = { Text(folder) },
                             leadingIcon = if (selected) {
                                 {
                                     Icon(
@@ -428,70 +584,104 @@ fun SettingsScreenContent(
                     }
                 }
             }
+        }
+    }
+}
 
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-
-            item {
-                Text(
-                    text = "Karten-Region wählen",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+@Composable
+fun MapSelectionDialog(
+    mapFiles: List<String>,
+    selectedMapFileName: String?,
+    onDismissRequest: () -> Unit,
+    onMapSelected: (String) -> Unit,
+    onMapDeleted: (String) -> Unit,
+    onImportMap: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Karte wählen")
+                TextButton(onClick = onImportMap) {
+                    Text("Import")
+                }
             }
-            
-            item {
-                Text(
-                    text = "Hinweis: Beim Ändern der Region wird die neue Karte beim nächsten Start der Kartenansicht automatisch geladen.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            items(MapRegions.AVAILABLE_REGIONS) { region ->
-                Card(
+        },
+        text = {
+            if (mapFiles.isEmpty()) {
+                Text("Keine Karten im Ordner gefunden. Importieren Sie eine .map Datei.")
+            } else {
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            onRegionSelected(region.id)
-                            selectedId = region.id
-                        },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (region.id == selectedId) 
-                            MaterialTheme.colorScheme.primaryContainer 
-                        else 
-                            MaterialTheme.colorScheme.surfaceVariant
-                    )
+                        .heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(text = region.displayName, style = MaterialTheme.typography.bodyLarge)
-                            Text(text = region.fileName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (region.id == selectedId) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Ausgewählt",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    items(mapFiles) { fileName ->
+                        val isSelected = fileName == selectedMapFileName
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onMapSelected(fileName) },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant
                             )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = fileName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                            IconButton(
+                                onClick = { onMapDeleted(fileName) },
+                                modifier = Modifier.align(Alignment.CenterVertically)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Löschen"
+                                )
+                            }
+                            }
                         }
                     }
                 }
             }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Schließen")
+            }
         }
-    }
+    )
 }
 
 @Preview(showBackground = true)
 @Composable
 fun SettingsScreenPreview() {
     SettingsScreenContent(
-        initialSelectedRegionId = "niedersachsen",
+        initialSelectedFileName = "world.map",
         initialSelectedThemeId = "cruiser",
         initialAltitudeCorrection = -48.0f,
         initialRoundtripFactor = 0.5f,
@@ -507,15 +697,19 @@ fun SettingsScreenPreview() {
         ),
         selectedGhFolder = "n52e0103d",
         selectedLocomotionKey = "1.1",
+        mapFiles = listOf("niedersachsen.map", "berlin.map", "world.map"),
+        selectedMapFileName = "world.map",
         onBack = {},
         onAltitudeCorrectionSaved = {},
         onFollowGpsToggled = {},
-        onRegionSelected = {},
         onThemeFileSelected = {},
         onThemeSelected = {},
         onGhFolderSelected = {},
         onGhZipImported = {},
         onLocomotionSelected = {},
-        onRoundtripFactorSaved = {}
+        onRoundtripFactorSaved = {},
+        onMapFileSelected = {},
+        onMapFileDeleted = {},
+        onMapImported = {}
     )
 }

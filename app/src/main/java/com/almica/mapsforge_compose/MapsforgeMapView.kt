@@ -87,25 +87,33 @@ fun MapsforgeMapView(
                 }
 
                 if (mapFile?.exists() == true) {
-                    val mapDataStore = MapFile(mapFile)
-                    val trl = TileRendererLayer(
-                        tileCache, mapDataStore, model.mapViewPosition, AndroidGraphicFactory.INSTANCE
-                    )
-                    
-                    applyTheme(trl, themeXmlFile)
-                    layerManager.layers.add(trl)
-                    
-                    // Apply initial state or center on map file/GPS
-                    model.mapViewPosition.setZoomLevel(state.zoomLevel.toByte())
-                    
-                    if (state.center.latitude == 0.0 && state.center.longitude == 0.0) {
-                        currentLocation?.let {
-                            state.center = LatLong(it.latitude, it.longitude)
-                        } ?: run {
-                            state.center = mapDataStore.startPosition()
+                    try {
+                        val mapDataStore = MapFile(mapFile)
+                        val trl = TileRendererLayer(
+                            tileCache, mapDataStore, model.mapViewPosition, AndroidGraphicFactory.INSTANCE
+                        )
+                        
+                        applyTheme(trl, themeXmlFile)
+                        layerManager.layers.add(trl)
+                        
+                        // Apply initial state or center on map file/GPS
+                        model.mapViewPosition.setZoomLevel(state.zoomLevel.toByte())
+                        
+                        if (state.center.latitude == 0.0 && state.center.longitude == 0.0) {
+                            currentLocation?.let {
+                                state.center = LatLong(it.latitude, it.longitude)
+                            } ?: run {
+                                state.center = mapDataStore.startPosition()
+                            }
+                        }
+                        model.mapViewPosition.setCenter(state.center)
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to load map file: ${mapFile.absolutePath}")
+                        // Optionally delete corrupted file so it can be re-downloaded next time
+                        if (mapFile.exists()) {
+                            mapFile.delete()
                         }
                     }
-                    model.mapViewPosition.setCenter(state.center)
                 }
                 onMapViewReady(this)
             }
@@ -182,7 +190,7 @@ private fun createGpsMarker(
         setStyle(org.mapsforge.core.graphics.Style.FILL)
     }
     canvas.drawCircle(size / 2, size / 2, radius, paint)
-    return Marker(LatLong(0.0, 0.0), bitmap, -size / 2, -size / 2)
+    return Marker(LatLong(0.0, 0.0), bitmap, 0, 0)
 }
 
 private fun createPolyline(

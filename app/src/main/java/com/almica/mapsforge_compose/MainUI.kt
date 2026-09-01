@@ -170,7 +170,18 @@ fun MainScreen(viewModel: MainViewModel) {
                 onGhFolderSelected = { viewModel.selectGraphHopperFolder(it) },
                 onGhZipImported = { viewModel.importGraphHopperZip(context, it) },
                 selectedLocomotionKey = uiState.selectedLocomotionKey,
-                onLocomotionSelected = { viewModel.selectLocomotion(it) }
+                onLocomotionSelected = { viewModel.selectLocomotion(it) },
+                mapFiles = uiState.mapFiles,
+                selectedMapFileName = uiState.selectedMapFileName,
+                onMapFileSelected = { viewModel.selectMapFile(it) },
+                onMapImported = { viewModel.importMapFile(context, it) },
+                onMapFileDeleted = {
+                    val result = uiState.mapDir?.resolve(it)?.delete()
+                    Timber.i("Map file deleted: $it $result")
+                    if (result == true) {
+                        viewModel.refreshMapFiles()
+                    }
+                }
             )
         }
     )
@@ -221,15 +232,19 @@ fun MapViewContainer(
     onCalculateRoute: (Double, Double, Double, Double) -> Unit,
     onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit
 ) {
-    val mapFile = remember<File?>(uiState.currentRegion) {
-        uiState.externalFilesDir?.let { File(it, uiState.currentRegion.fileName) }
+    val mapFile = remember<File?>(uiState.currentRegion, uiState.selectedMapFileName) {
+        uiState.mapDir?.let { dir ->
+            val fileName = uiState.selectedMapFileName ?: uiState.currentRegion.fileName
+            File(dir, fileName)
+        }
     }
+    val effectiveMapFileExists = remember(mapFile) { mapFile?.exists() == true }
 
     MapViewContainerContent(
         isDownloading = uiState.isDownloading,
-        regionDisplayName = uiState.currentRegion.displayName,
+        regionDisplayName = uiState.selectedMapFileName ?: uiState.currentRegion.displayName,
         downloadProgress = uiState.downloadProgress,
-        mapFileExists = uiState.mapFileExists,
+        mapFileExists = effectiveMapFileExists,
         mapFile = mapFile,
         themeFile = uiState.themeFile,
         gpsLocation = gpsLocation,
@@ -293,7 +308,7 @@ fun MapViewContainerContent(
 ) {
     val mapViewReference = remember { mutableStateOf<MapView?>(null) }
     var isMoving by remember { mutableStateOf(false) }
-
+    Timber.i("mapFile: ${mapFile?.path}")
     // Detect movement to show crosshair when not following GPS
     LaunchedEffect(targetPosition) {
         if (!followGps && targetPosition != null) {
@@ -687,10 +702,10 @@ fun MainScreenPreview() {
         mapViewContainer = {
             MapViewContainerContent(
                 isDownloading = false,
-                regionDisplayName = "Niedersachsen",
+                regionDisplayName = "World",
                 downloadProgress = 0f,
                 mapFileExists = true,
-                mapFile = File("niedersachsen.map"),
+                mapFile = File("world.map"),
                 themeFile = null,
                 gpsLocation = RoutePoint(52.5200, 13.4050, 80.0),
                 loadedTrackPoints = listOf(

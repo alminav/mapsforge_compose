@@ -12,9 +12,9 @@ data class MapRegion(
     val fileName: String
 )
 
-// ToDo world.map from assets
 object MapRegions {
     val AVAILABLE_REGIONS = listOf(
+        MapRegion("world", "World", "", "world.map"),
         MapRegion("niedersachsen", "Niedersachsen", "https://download.mapsforge.org/maps/v5/europe/germany/niedersachsen.map", "niedersachsen.map"),
         MapRegion("sachsen-anhalt", "Sachsen-Anhalt", "https://download.mapsforge.org/maps/v5/europe/germany/sachsen-anhalt.map", "sachsen_anhalt.map"),
         MapRegion("balearen", "Balearen", "https://download.mapsforge.org/maps/v5/europe/spain/islas-baleares.map", "baleares.map"),
@@ -44,17 +44,17 @@ class SettingsRepository(context: Context) {
     private val defaultPrefs = PreferenceManager.getDefaultSharedPreferences(context)
     private val locomotionKeyString = context.getString(R.string.setting_locomotion)
 
-    fun getSelectedRegionId(): String {
-        return sharedPreferences.getString("selected_region_id", "niedersachsen") ?: "niedersachsen"
-    }
-
     fun getSelectedRegion(): MapRegion {
-        val id = getSelectedRegionId()
-        return MapRegions.AVAILABLE_REGIONS.find { it.id == id } ?: MapRegions.AVAILABLE_REGIONS.first()
+        val fileName = getSelectedMapFileName()
+        return MapRegions.AVAILABLE_REGIONS.find { it.fileName == fileName } ?: MapRegions.AVAILABLE_REGIONS.first()
     }
 
-    fun setSelectedRegionId(id: String) {
-        sharedPreferences.edit { putString("selected_region_id", id) }
+    fun getSelectedMapFileName(): String? {
+        return sharedPreferences.getString("selected_map_file_name", null)
+    }
+
+    fun setSelectedMapFileName(fileName: String?) {
+        sharedPreferences.edit { putString("selected_map_file_name", fileName) }
     }
 
     fun getAltitudeCorrection(): Float {

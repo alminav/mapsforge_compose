@@ -1,6 +1,7 @@
 package com.almica.mapsforge_compose.gh
 
 object Const {
+    const val MAPFOLDER: String = "maps"
     const val HGT_FOLDER_NAME = "hgt"
     const val HGT_EXT = ".hgt"
     const val PREF_GH_FILEPATH = "pref_gh_filepath"
