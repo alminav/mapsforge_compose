@@ -107,7 +107,7 @@ class TrackingService : Service(), SensorEventListener {
                 val correction = settings.getAltitudeCorrection()
                 val baseAltitude = locationData.mslAltitude ?: locationData.altitude
                 processNewLocation(RoutePoint(locationData.latitude,
-                    locationData.longitude, baseAltitude + correction), baseAltitude + correction)
+                    locationData.longitude, baseAltitude + correction, locationData.time), baseAltitude + correction)
             }
         }
     }

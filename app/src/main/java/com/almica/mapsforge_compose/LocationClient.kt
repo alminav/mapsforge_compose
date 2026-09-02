@@ -13,7 +13,8 @@ data class LocationData(
     val latitude: Double,
     val longitude: Double,
     val altitude: Double,
-    val mslAltitude: Double? = null
+    val mslAltitude: Double? = null,
+    val time: Long
 )
 
 class LocationClient(private val context: Context) {
@@ -43,7 +44,8 @@ class LocationClient(private val context: Context) {
                             latitude = loc.latitude,
                             longitude = loc.longitude,
                             altitude = loc.altitude,
-                            mslAltitude = mslAlt
+                            mslAltitude = mslAlt,
+                            time = loc.time
                         )
                     )
                 }

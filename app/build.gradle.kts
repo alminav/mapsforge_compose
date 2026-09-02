@@ -79,6 +79,11 @@ dependencies {
     // Preference
     implementation(libs.androidx.preference.ktx)
 
+    // Gson
+    implementation(libs.gson)
+
     // GraphHopper
     implementation(project(":graphhopper"))
+    // Charts
+    implementation(project(":composecharts"))
 }

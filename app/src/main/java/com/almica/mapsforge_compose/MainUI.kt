@@ -20,6 +20,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.LocationDisabled
 import androidx.compose.material.icons.filled.Remove
@@ -35,9 +37,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.TextStyle
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.almica.mapsforge_compose.charts.GradientChart
+import com.almica.mapsforge_compose.charts.RouteEntity
+import com.almica.mapsforge_compose.charts.toKmlString
 import com.almica.mapsforge_compose.gh.GhHelper.Locomotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -46,6 +50,9 @@ import org.mapsforge.map.android.view.MapView
 import timber.log.Timber
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
@@ -53,6 +60,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val gpsLocation by viewModel.locationFlow.collectAsStateWithLifecycle(initialValue = null)
     val tourStats by viewModel.statsFlow.collectAsStateWithLifecycle()
     val isEcoActive by viewModel.isEcoMode.collectAsStateWithLifecycle()
+    var showGradientChart by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -77,7 +85,12 @@ fun MainScreen(viewModel: MainViewModel) {
         downloadMessage = uiState.downloadMessage ?: "",
         downloadProgress = uiState.downloadProgress,
         mapFileExists = uiState.mapFileExists,
+        loadedTrackPoints = uiState.loadedTrackPoints,
+        loadedTrackName = uiState.loadedTrackName,
+        showGradientChart = showGradientChart,
+        onDismissGradientChart = { showGradientChart = false },
         snackbarHostState = snackbarHostState,
+        onMove = viewModel::setTargetPosition,
         mapViewContainer = {
             MapViewContainer(
                 uiState = uiState,
@@ -92,7 +105,13 @@ fun MainScreen(viewModel: MainViewModel) {
                 onAddPoi = viewModel::addPoi,
                 onDeletePoi = viewModel::deletePoi,
                 onToggleFollowGps = { viewModel.setFollowGps(!uiState.followGps) },
-                onClearTrack = { viewModel.setLoadedTrackPoints(emptyList()) },
+                onSaveTrack = { name -> viewModel.saveCurrentTrack(name) },
+                onClearTrack = {
+                    viewModel.setLoadedTrackPoints(emptyList())
+                    viewModel.setLoadedTrackName(null)
+                    showGradientChart = false
+                },
+                onShowGradientChart = { showGradientChart = true },
                 onPoiClick = { poi ->
                     viewModel.setTargetPosition(LatLong(poi.latitude, poi.longitude))
                     scope.launch {
@@ -144,6 +163,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 db = viewModel.db,
                 onTourSelected = { tour ->
                     viewModel.setLoadedTrackPoints(tour.routePoints)
+                    viewModel.setLoadedTrackName(tour.name)
                     tour.routePoints.firstOrNull()?.let { firstPoint ->
                         val latLong = LatLong(firstPoint.latitude, firstPoint.longitude)
                         viewModel.setTargetPosition(latLong)
@@ -199,6 +219,7 @@ fun MainScreen(viewModel: MainViewModel) {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenContent(
     currentScreen: AppScreen,
@@ -206,20 +227,67 @@ fun MainScreenContent(
     downloadMessage: String,
     downloadProgress: Float,
     mapFileExists: Boolean,
+    loadedTrackPoints: List<RoutePoint>,
     snackbarHostState: SnackbarHostState,
+    onMove: (LatLong?) -> Unit,
     mapViewContainer: @Composable () -> Unit,
     tourHistoryScreen: @Composable () -> Unit,
-    settingsScreen: @Composable () -> Unit
+    settingsScreen: @Composable () -> Unit,
+    loadedTrackName: String?,
+    showGradientChart: Boolean,
+    onDismissGradientChart: () -> Unit
 ) {
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         modifier = Modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        // Ensure the scaffold itself accounts for system bars
+        contentWindowInsets = WindowInsets.systemBars
     ) { innerPadding ->
-        Box(modifier = Modifier
-            .padding(innerPadding)
-            .fillMaxSize()) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
             when (currentScreen) {
-                AppScreen.MAP -> mapViewContainer()
+                AppScreen.MAP -> {
+                    val scaffoldState = rememberBottomSheetScaffoldState()
+                    BottomSheetScaffold(
+                        scaffoldState = scaffoldState,
+                        sheetPeekHeight = if (showGradientChart && loadedTrackPoints.isNotEmpty()) 120.dp else 0.dp,
+                        sheetContent = {
+                            if (showGradientChart && loadedTrackPoints.isNotEmpty()) {
+                                val routeEntity = remember(loadedTrackPoints) {
+                                    RouteEntity(
+                                        name = loadedTrackName ?: "Calculated Route",
+                                        kmlString = loadedTrackPoints.toKmlString(loadedTrackName)
+                                    )
+                                }
+
+                                GradientChart(
+                                    routeEntity = routeEntity,
+                                    moveMap = { latLng ->
+                                        onMove(latLng?.let { LatLong(it.latitude, it.longitude) })
+                                    },
+                                    onDismiss = onDismissGradientChart
+                                )
+                            }
+/*
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(128.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Bottom Sheet Content")
+                            }
+ */
+                        },
+                        modifier = Modifier.padding(innerPadding),
+                        sheetSwipeEnabled = true
+                    ) { mapPadding ->
+                        Box(Modifier.padding(mapPadding)) {
+                            mapViewContainer()
+                        }
+                    }
+                }
                 AppScreen.HISTORY -> tourHistoryScreen()
                 AppScreen.SETTINGS -> settingsScreen()
             }
@@ -245,7 +313,9 @@ fun MapViewContainer(
     onAddPoi: (String, String?, LatLong) -> Unit,
     onDeletePoi: (PoiEntity) -> Unit,
     onToggleFollowGps: () -> Unit,
+    onSaveTrack: (String) -> Unit,
     onClearTrack: () -> Unit,
+    onShowGradientChart: () -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -281,6 +351,7 @@ fun MapViewContainer(
                 currentLocation = gpsLocation,
                 stats = stats,
                 hasTrack = uiState.loadedTrackPoints.isNotEmpty(),
+                loadedTrackName = uiState.loadedTrackName,
                 followGps = uiState.followGps,
                 mapCenter = uiState.targetPosition,
                 pois = uiState.pois,
@@ -293,7 +364,9 @@ fun MapViewContainer(
                 onDeletePoi = onDeletePoi,
                 onPoiClick = onPoiClick,
                 onToggleFollowGps = onToggleFollowGps,
+                onSaveTrack = onSaveTrack,
                 onClearTrack = onClearTrack,
+                onShowGradientChart = onShowGradientChart,
                 onHistoryClick = onHistoryClick,
                 onSettingsClick = onSettingsClick,
                 onCalculateRoute = onCalculateRoute,
@@ -459,6 +532,7 @@ fun MapControls(
     currentLocation: RoutePoint?,
     stats: TourStatistics,
     hasTrack: Boolean,
+    loadedTrackName: String?,
     mapCenter: LatLong?,
     followGps: Boolean,
     pois: List<PoiEntity>,
@@ -469,7 +543,9 @@ fun MapControls(
     onDeletePoi: (PoiEntity) -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onToggleFollowGps: () -> Unit,
+    onSaveTrack: (String) -> Unit,
     onClearTrack: () -> Unit,
+    onShowGradientChart: () -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onCalculateRoute: (Double, Double, Double, Double) -> Unit,
@@ -488,6 +564,7 @@ fun MapControls(
 
     var showAddPoiDialog by remember { mutableStateOf(false) }
     var showPoiListDialog by remember { mutableStateOf(false) }
+    var showSaveTrackDialog by remember { mutableStateOf(false) }
 
     if (showAddPoiDialog) {
         var label by remember { mutableStateOf("") }
@@ -544,6 +621,41 @@ fun MapControls(
         )
     }
 
+    if (showSaveTrackDialog) {
+        val defaultName = remember {
+            SimpleDateFormat("yyyy-MM-dd_HH:mm", Locale.getDefault()).format(Date())
+        }
+        var trackName by remember { mutableStateOf(loadedTrackName ?: defaultName) }
+        AlertDialog(
+            onDismissRequest = { showSaveTrackDialog = false },
+            title = { Text("Route speichern") },
+            text = {
+                OutlinedTextField(
+                    value = trackName,
+                    onValueChange = { trackName = it },
+                    placeholder = { Text("Name der Route") },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (trackName.isNotBlank()) {
+                        onSaveTrack(trackName)
+                        showSaveTrackDialog = false
+                    }
+                }) {
+                    Text("Speichern")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveTrackDialog = false }) {
+                    Text("Abbrechen")
+                }
+            }
+        )
+    }
+
     MapControlsContent(
         isTrackingActive = isTrackingActive,
         isEcoActive = isEcoActive,
@@ -576,7 +688,9 @@ fun MapControls(
         onClearTrack = onClearTrack,
         onToggleFollowGps = onToggleFollowGps,
         onAddPoiClick = { showAddPoiDialog = true },
-        onPoiListClick = { showPoiListDialog = true }
+        onPoiListClick = { showPoiListDialog = true },
+        onSaveTrackClick = { showSaveTrackDialog = true },
+        onShowGradientChart = onShowGradientChart
     )
 }
 
@@ -594,9 +708,16 @@ fun MapControlsContent(
     onClearTrack: () -> Unit,
     onToggleFollowGps: () -> Unit,
     onAddPoiClick: () -> Unit,
-    onPoiListClick: () -> Unit
+    onPoiListClick: () -> Unit,
+    onSaveTrackClick: () -> Unit,
+    onShowGradientChart: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // Add navigation bar padding to the whole control layer to avoid overlap
+            .windowInsetsPadding(WindowInsets.navigationBars)
+    ) {
         Row(modifier = Modifier
             .padding(5.dp)
             .align(Alignment.TopCenter)) {
@@ -670,16 +791,49 @@ fun MapControlsContent(
             )
         }
 
-        if (hasTrack && !isTrackingActive) {
-            SmallFloatingActionButton(
-                onClick = onClearTrack,
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        // Track Menu
+        if (hasTrack) {
+            var showTrackMenu by remember { mutableStateOf(false) }
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 16.dp)
+                    .padding(end = 16.dp, bottom = 90.dp)
             ) {
-                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete_track))
+                SmallFloatingActionButton(
+                    onClick = { showTrackMenu = true },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Track Menü")
+                }
+                DropdownMenu(
+                    expanded = showTrackMenu,
+                    onDismissRequest = { showTrackMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_delete_track)) },
+                        onClick = {
+                            showTrackMenu = false
+                            onClearTrack()
+                        },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Route speichern") },
+                        onClick = {
+                            showTrackMenu = false
+                            onSaveTrackClick()
+                        },
+                        leadingIcon = { Icon(Icons.Default.Save, contentDescription = null) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Route Info") },
+                        onClick = {
+                            onShowGradientChart() /* TODO: Implement info */
+                            showTrackMenu = false  },
+                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) }
+                    )
+                }
             }
         }
 
@@ -741,7 +895,15 @@ fun MainScreenPreview() {
         downloadMessage = "Map loading...",
         downloadProgress = 0f,
         mapFileExists = true,
+        loadedTrackPoints = listOf(
+            RoutePoint(52.5200, 13.4050, 80.0),
+            RoutePoint(52.5210, 13.4060, 85.0),
+            RoutePoint(52.5220, 13.4070, 90.0)
+        ),
         snackbarHostState = remember { SnackbarHostState() },
+        onMove = {},
+        showGradientChart = false,
+        onDismissGradientChart = {},
         mapViewContainer = {
             MapViewContainerContent(
                 mapFileExists = true,
@@ -779,12 +941,15 @@ fun MainScreenPreview() {
                         onClearTrack = {},
                         onToggleFollowGps = {},
                         onAddPoiClick = {},
-                        onPoiListClick = {}
+                        onPoiListClick = {},
+                        onSaveTrackClick = {},
+                        onShowGradientChart = {}
                     )
                 }
             )
         },
         tourHistoryScreen = {},
-        settingsScreen = {}
+        settingsScreen = {},
+        loadedTrackName = "Loaded Track"
     )
 }

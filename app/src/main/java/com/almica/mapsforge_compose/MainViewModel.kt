@@ -33,6 +33,7 @@ data class MainUiState(
     val themeFile: File? = null,
     val isTrackingActive: Boolean = false,
     val loadedTrackPoints: List<RoutePoint> = emptyList(),
+    val loadedTrackName: String? = null,
     val activeTrackPoints: List<RoutePoint> = emptyList(),
     val pois: List<PoiEntity> = emptyList(),
     val followGps: Boolean = true,
@@ -333,6 +334,29 @@ class MainViewModel(
         _uiState.update { it.copy(loadedTrackPoints = points) }
     }
 
+    fun setLoadedTrackName(name: String?) {
+        _uiState.update { it.copy(loadedTrackName = name) }
+    }
+
+    fun saveCurrentTrack(name: String) {
+        Timber.i("Saving track: $name")
+        val points = _uiState.value.loadedTrackPoints
+        if (points.isEmpty()) return
+
+        viewModelScope.launch {
+            val stats = TrackStatsCalculator.calculateStats(points)
+            val newTour = TourEntity(
+                name = name,
+                timestamp = System.currentTimeMillis(),
+                totalDistanceKm = stats.totalDistanceKm,
+                elevationGainMeters = stats.elevationGainMeters,
+                routePoints = points
+            )
+            db.tourDao().insertTour(newTour)
+            Timber.i("Saved track: $name with ${points.size} points")
+        }
+    }
+
     fun setThemeFile(file: File?) {
         settingsRepository.setThemeFilePath(file?.absolutePath)
         _uiState.update { it.copy(themeFile = getThemeFile()) }
@@ -525,6 +549,7 @@ class MainViewModel(
             )
             if (result.success) {
                 setLoadedTrackPoints(result.points)
+                setLoadedTrackName(result.name)
             }
         }
     }
@@ -543,6 +568,7 @@ class MainViewModel(
             )
             if (result.success) {
                 setLoadedTrackPoints(result.points)
+                setLoadedTrackName(result.name)
             }
         }
     }
