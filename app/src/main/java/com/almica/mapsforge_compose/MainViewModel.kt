@@ -47,7 +47,9 @@ data class MainUiState(
     val selectedGraphHopperFolder: String? = null,
     val selectedLocomotionKey: String = "1.1",
     val roundTripFactor: Float = 0.5f,
-    val downloadMessage: String? = null
+    val downloadMessage: String? = null,
+    val isAppending: Boolean = false,
+    val keepScreenOn: Boolean = false
 )
 
 class MainViewModel(
@@ -80,7 +82,8 @@ class MainViewModel(
             graphHopperFolders = getGraphHopperFoldersList(),
             selectedGraphHopperFolder = settingsRepository.getGraphHopperFolder(),
             selectedLocomotionKey = settingsRepository.getLocomotionKey(),
-            roundTripFactor = settingsRepository.getRoundTripFactor()
+            roundTripFactor = settingsRepository.getRoundTripFactor(),
+            keepScreenOn = settingsRepository.getKeepScreenOn()
         )
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -216,6 +219,10 @@ class MainViewModel(
         _uiState.update { it.copy(currentScreen = screen) }
     }
 
+    fun setIsAppending(isAppending: Boolean) {
+        _uiState.update { it.copy(isAppending = isAppending) }
+    }
+
     fun setRegion(region: MapRegion) {
         Timber.d("setRegion: ${region.displayName}")
         _uiState.update { it.copy(currentRegion = region) }
@@ -304,6 +311,11 @@ class MainViewModel(
     fun setFollowGps(enabled: Boolean) {
         settingsRepository.setFollowGps(enabled)
         _uiState.update { it.copy(followGps = enabled) }
+    }
+
+    fun setKeepScreenOn(enabled: Boolean) {
+        settingsRepository.setKeepScreenOn(enabled)
+        _uiState.update { it.copy(keepScreenOn = enabled) }
     }
 
     fun setTargetPosition(position: LatLong?) {

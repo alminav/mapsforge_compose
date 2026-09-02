@@ -35,6 +35,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onRegionChanged: () -> Unit,
     onFollowGpsChanged: (Boolean) -> Unit = {},
+    onKeepScreenOnChanged: (Boolean) -> Unit = {},
     onThemeFileSelected: (Uri) -> Unit = {},
     onThemeSelected: (String) -> Unit = {},
     ghFolders: List<String> = emptyList(),
@@ -57,6 +58,7 @@ fun SettingsScreen(
         initialAltitudeCorrection = repository.getAltitudeCorrection(),
         initialRoundtripFactor = repository.getRoundTripFactor(),
         initialFollowGps = repository.getFollowGps(),
+        initialKeepScreenOn = repository.getKeepScreenOn(),
         themeFilePath = repository.getThemeFilePath(),
         ghFolders = ghFolders,
         selectedGhFolder = selectedGhFolder,
@@ -68,6 +70,10 @@ fun SettingsScreen(
         onFollowGpsToggled = {
             repository.setFollowGps(it)
             onFollowGpsChanged(it)
+        },
+        onKeepScreenOnToggled = {
+            repository.setKeepScreenOn(it)
+            onKeepScreenOnChanged(it)
         },
         onThemeFileSelected = onThemeFileSelected,
         onThemeSelected = onThemeSelected,
@@ -94,6 +100,7 @@ fun SettingsScreenContent(
     initialSelectedThemeId: String,
     initialAltitudeCorrection: Float,
     initialFollowGps: Boolean,
+    initialKeepScreenOn: Boolean,
     themeFilePath: String?,
     ghFolders: List<String>,
     selectedGhFolder: String?,
@@ -103,6 +110,7 @@ fun SettingsScreenContent(
     onBack: () -> Unit,
     onAltitudeCorrectionSaved: (Float) -> Unit,
     onFollowGpsToggled: (Boolean) -> Unit,
+    onKeepScreenOnToggled: (Boolean) -> Unit,
     onThemeFileSelected: (Uri) -> Unit,
     onThemeSelected: (String) -> Unit,
     onGhFolderSelected: (String) -> Unit,
@@ -124,6 +132,7 @@ fun SettingsScreenContent(
     var altitudeCorrection by remember { mutableStateOf(initialAltitudeCorrection) }
     var roundtripFactor by remember { mutableStateOf(initialRoundtripFactor) }
     var followGps by remember { mutableStateOf(initialFollowGps) }
+    var keepScreenOn by remember { mutableStateOf(initialKeepScreenOn) }
     var showAltitudeDialog by remember { mutableStateOf(false) }
     var showRoundtripDialog by remember { mutableStateOf(false) }
     var showMapSelectionDialog by remember { mutableStateOf(false) }
@@ -265,6 +274,11 @@ fun SettingsScreenContent(
                     onFollowGpsToggled = {
                         onFollowGpsToggled(it)
                         followGps = it
+                    },
+                    keepScreenOn = keepScreenOn,
+                    onKeepScreenOnToggled = {
+                        onKeepScreenOnToggled(it)
+                        keepScreenOn = it
                     }
                 )
                 1 -> MapSettingsTab(
@@ -306,7 +320,9 @@ fun GeneralSettingsTab(
     altitudeCorrection: Float,
     onAltitudeClick: () -> Unit,
     followGps: Boolean,
-    onFollowGpsToggled: (Boolean) -> Unit
+    onFollowGpsToggled: (Boolean) -> Unit,
+    keepScreenOn: Boolean,
+    onKeepScreenOnToggled: (Boolean) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -354,6 +370,32 @@ fun GeneralSettingsTab(
                     Switch(
                         checked = followGps,
                         onCheckedChange = onFollowGpsToggled
+                    )
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Bildschirm eingeschaltet lassen", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "Verhindert, dass der Bildschirm während der Nutzung dunkel wird.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = keepScreenOn,
+                        onCheckedChange = onKeepScreenOnToggled
                     )
                 }
             }
@@ -752,6 +794,7 @@ fun SettingsScreenPreview() {
         initialAltitudeCorrection = -48.0f,
         initialRoundtripFactor = 0.5f,
         initialFollowGps = true,
+        initialKeepScreenOn = false,
         themeFilePath = null,
         ghFolders = listOf(
             "germany_hamburg", 
@@ -768,6 +811,7 @@ fun SettingsScreenPreview() {
         onBack = {},
         onAltitudeCorrectionSaved = {},
         onFollowGpsToggled = {},
+        onKeepScreenOnToggled = {},
         onThemeFileSelected = {},
         onThemeSelected = {},
         onGhFolderSelected = {},

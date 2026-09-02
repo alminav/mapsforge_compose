@@ -141,4 +141,12 @@ class SettingsRepository(context: Context) {
     fun setLastZoom(zoom: Int) {
         sharedPreferences.edit { putInt("last_zoom", zoom) }
     }
+
+    fun getKeepScreenOn(): Boolean {
+        return sharedPreferences.getBoolean("keep_screen_on", false)
+    }
+
+    fun setKeepScreenOn(enabled: Boolean) {
+        sharedPreferences.edit { putBoolean("keep_screen_on", enabled) }
+    }
 }

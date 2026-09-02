@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Polyline
+import androidx.compose.material.icons.filled.Search
 import com.almica.mapsforge_compose.TourUtils.simplifyToTargetCount
 
 enum class TourSortOption {
@@ -53,15 +54,22 @@ fun TourHistoryScreen(
 
     val tourList by db.tourDao().getAllTours().collectAsState(initial = emptyList())
     var currentSortOption by remember { mutableStateOf(TourSortOption.NAME_ASC) }
+    var nameFilter by remember { mutableStateOf("") }
 
-    val sortedTourList = remember(tourList, currentSortOption) {
+    val filteredAndSortedTourList = remember(tourList, currentSortOption, nameFilter) {
+        val filtered = if (nameFilter.isBlank()) {
+            tourList
+        } else {
+            tourList.filter { it.name?.contains(nameFilter, ignoreCase = true) == true }
+        }
+
         when (currentSortOption) {
-            TourSortOption.DATE_DESC -> tourList.sortedByDescending { it.timestamp }
-            TourSortOption.NAME_ASC -> tourList.sortedBy { it.name?.lowercase() ?: "" }
-            TourSortOption.DISTANCE_DESC -> tourList.sortedByDescending { it.totalDistanceKm }
-            TourSortOption.DISTANCE_ASC -> tourList.sortedBy { it.totalDistanceKm }
+            TourSortOption.DATE_DESC -> filtered.sortedByDescending { it.timestamp }
+            TourSortOption.NAME_ASC -> filtered.sortedBy { it.name?.lowercase() ?: "" }
+            TourSortOption.DISTANCE_DESC -> filtered.sortedByDescending { it.totalDistanceKm }
+            TourSortOption.DISTANCE_ASC -> filtered.sortedBy { it.totalDistanceKm }
             TourSortOption.PROXIMITY_ASC -> {
-                if (currentMapPosition == null) tourList
+                if (currentMapPosition == null) filtered
                 else tourList.sortedBy { tour ->
                     val startPoint = tour.routePoints.firstOrNull()
                     if (startPoint != null) TrackStatsCalculator.calculateDistanceKm(currentMapPosition, LatLong(startPoint.latitude, startPoint.longitude))
@@ -291,13 +299,31 @@ fun TourHistoryScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = nameFilter,
+                onValueChange = { nameFilter = it },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                placeholder = { Text(stringResource(R.string.tour_name_label)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (nameFilter.isNotEmpty()) {
+                        IconButton(onClick = { nameFilter = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = MaterialTheme.shapes.medium
+            )
 
-            if (sortedTourList.isEmpty()) {
+            if (filteredAndSortedTourList.isEmpty()) {
                 Text(stringResource(R.string.tour_history_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(sortedTourList) { tour ->
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredAndSortedTourList) { tour ->
                         TourHistoryItem(
                             tour = tour,
                             onClick = { onTourSelected(tour) },

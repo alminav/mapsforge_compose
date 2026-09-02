@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.AddLocation
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
@@ -111,6 +112,13 @@ fun MainScreen(viewModel: MainViewModel) {
                     viewModel.setLoadedTrackName(null)
                     showGradientChart = false
                 },
+                onRouteAppend = {
+                    // We reuse the HISTORY screen to pick a tour to append
+                    viewModel.setScreen(AppScreen.HISTORY)
+                    // Note: We'll need to handle the selection logic in the tourHistoryScreen block
+                    // By checking a state or passing a specific callback
+                    viewModel.setIsAppending(true)
+                },
                 onShowGradientChart = { showGradientChart = true },
                 onPoiClick = { poi ->
                     viewModel.setTargetPosition(LatLong(poi.latitude, poi.longitude))
@@ -162,8 +170,15 @@ fun MainScreen(viewModel: MainViewModel) {
             TourHistoryScreen(
                 db = viewModel.db,
                 onTourSelected = { tour ->
-                    viewModel.setLoadedTrackPoints(tour.routePoints)
-                    viewModel.setLoadedTrackName(tour.name)
+                    if (uiState.isAppending) {
+                        val currentPoints = uiState.loadedTrackPoints
+                        viewModel.setLoadedTrackPoints(currentPoints + tour.routePoints)
+                        viewModel.setIsAppending(false)
+                    } else {
+                        viewModel.setLoadedTrackPoints(tour.routePoints)
+                        viewModel.setLoadedTrackName(tour.name)
+                    }
+
                     tour.routePoints.firstOrNull()?.let { firstPoint ->
                         val latLong = LatLong(firstPoint.latitude, firstPoint.longitude)
                         viewModel.setTargetPosition(latLong)
@@ -171,7 +186,10 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                     viewModel.setScreen(AppScreen.MAP)
                 },
-                onClose = { viewModel.setScreen(AppScreen.MAP) },
+                onClose = {
+                    viewModel.setIsAppending(false)
+                    viewModel.setScreen(AppScreen.MAP)
+                },
                 currentMapPosition = uiState.targetPosition
             )
         },
@@ -184,6 +202,9 @@ fun MainScreen(viewModel: MainViewModel) {
                 },
                 onFollowGpsChanged = { enabled ->
                     viewModel.setFollowGps(enabled)
+                },
+                onKeepScreenOnChanged = { enabled ->
+                    viewModel.setKeepScreenOn(enabled)
                 },
                 onThemeFileSelected = { uri ->
                     viewModel.importThemeFile(context, uri)
@@ -315,6 +336,7 @@ fun MapViewContainer(
     onToggleFollowGps: () -> Unit,
     onSaveTrack: (String) -> Unit,
     onClearTrack: () -> Unit,
+    onRouteAppend: () -> Unit,
     onShowGradientChart: () -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onHistoryClick: () -> Unit,
@@ -367,6 +389,7 @@ fun MapViewContainer(
                 onSaveTrack = onSaveTrack,
                 onClearTrack = onClearTrack,
                 onShowGradientChart = onShowGradientChart,
+                omRouteAppend = onRouteAppend,
                 onHistoryClick = onHistoryClick,
                 onSettingsClick = onSettingsClick,
                 onCalculateRoute = onCalculateRoute,
@@ -545,6 +568,7 @@ fun MapControls(
     onToggleFollowGps: () -> Unit,
     onSaveTrack: (String) -> Unit,
     onClearTrack: () -> Unit,
+    omRouteAppend: () -> Unit,
     onShowGradientChart: () -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -690,7 +714,8 @@ fun MapControls(
         onAddPoiClick = { showAddPoiDialog = true },
         onPoiListClick = { showPoiListDialog = true },
         onSaveTrackClick = { showSaveTrackDialog = true },
-        onShowGradientChart = onShowGradientChart
+        onShowGradientChart = onShowGradientChart,
+        omRouteAppend = omRouteAppend
     )
 }
 
@@ -710,7 +735,8 @@ fun MapControlsContent(
     onAddPoiClick: () -> Unit,
     onPoiListClick: () -> Unit,
     onSaveTrackClick: () -> Unit,
-    onShowGradientChart: () -> Unit
+    onShowGradientChart: () -> Unit,
+    omRouteAppend: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -829,9 +855,16 @@ fun MapControlsContent(
                     DropdownMenuItem(
                         text = { Text("Route Info") },
                         onClick = {
-                            onShowGradientChart() /* TODO: Implement info */
+                            onShowGradientChart()
                             showTrackMenu = false  },
                         leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Route Append") },
+                        onClick = {
+                            omRouteAppend()
+                            showTrackMenu = false  },
+                        leadingIcon = { Icon(Icons.Default.ExpandMore, contentDescription = null) }
                     )
                 }
             }
@@ -943,7 +976,8 @@ fun MainScreenPreview() {
                         onAddPoiClick = {},
                         onPoiListClick = {},
                         onSaveTrackClick = {},
-                        onShowGradientChart = {}
+                        onShowGradientChart = {},
+                        omRouteAppend = {}
                     )
                 }
             )
