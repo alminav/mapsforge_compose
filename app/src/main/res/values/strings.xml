@@ -43,7 +43,6 @@
     <string name="menu_settings">Optionen ⚙️</string>
     <string name="action_follow_gps">GPS folgen</string>
     <string name="action_delete_track">Löschen</string>
-    <string name="eco_mode_active">🌱 Akkusparmodus aktiv</string>
     <string name="zoom_in">Zoom In</string>
     <string name="zoom_out">Zoom Out</string>
     <string name="tracking_stopped">Tracking stopped</string>

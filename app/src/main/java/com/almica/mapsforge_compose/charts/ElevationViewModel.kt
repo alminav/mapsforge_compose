@@ -32,7 +32,7 @@ sealed class ElevationUiState(
     data class Success(
         val points: List<LatLngH>,
         val distances: List<Double>,
-        val dataModel: GradientChartDataModel,
+        //val dataModel: GradientChartDataModel,
         override val locationBearing: Float = 0f,
         override val locationSpeed: Float = 0f,
         override val locationAltitude: Double = 0.0,
@@ -82,7 +82,7 @@ class ElevationViewModel(application: Application) : AndroidViewModel(applicatio
                         locationTime = location.time
                     )
                 }
-                updateDataPoint()
+                //updateDataPoint()
             }
         }
     }
@@ -92,13 +92,13 @@ class ElevationViewModel(application: Application) : AndroidViewModel(applicatio
             val lllh = dataPoints.map { LatLngH(it.latitude, it.longitude, it.elevationMeters.toDouble()) }
             val routeDistance = lllh.getDistanceFromLllh()
             val cumulativeDistances = calculateCumulativeDistances(lllh)
-            val barChartDataModel = GradientChartDataModel(lllh, -1, routeDistance)
+            //val barChartDataModel = GradientChartDataModel(lllh, -1, routeDistance)
 
             _uiState.update {
                 ElevationUiState.Success(
                     points = lllh,
                     distances = cumulativeDistances,
-                    dataModel = barChartDataModel,
+                    //dataModel = barChartDataModel,
                     latLng = it.latLng,
                     locationSpeed = it.locationSpeed,
                     locationBearing = it.locationBearing,
@@ -117,34 +117,5 @@ class ElevationViewModel(application: Application) : AndroidViewModel(applicatio
             distances.add(sum)
         }
         return distances
-    }
-
-    private fun updateDataPoint() {
-        val state = _uiState.value
-        if (state is ElevationUiState.Success && state.latLng != null) {
-            val pointer = state.points.indices.minByOrNull { index ->
-                val point = state.points[index]
-                MapUtils.calculateHaversineDistance(
-                    LatLng(state.latLng.latitude, state.latLng.longitude),
-                    LatLng(point.latitude, point.longitude)
-                )
-            } ?: -1
-            /**
-             * 20aug2026 heading check removed
-            val pointer = nearestRoutePoint(
-            state.locationBearing.toDouble(),
-            state.latLng,
-            state.points
-            )
-             */
-            if (pointer != state.dataModel.routePointer) {
-                // label = if ((i-1)==routePointer) Const.UC_ARROW_UP
-
-                state.dataModel.routePointer = pointer
-                val routeDistance = state.distances.lastOrNull() ?: 0.0
-                state.dataModel.sliderPosition = pointer.toFloat() + 0.5f
-                state.dataModel.barChartData = generateGradientChart(state.points, pointer, routeDistance)
-            }
-        }
     }
 }

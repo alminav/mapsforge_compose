@@ -90,7 +90,6 @@ class MainViewModel(
 
     val locationFlow = TrackingService.locationFlow
     val statsFlow = TrackingService.statsFlow
-    val isEcoMode = TrackingService.isEcoMode
 
     init {
         // Observe location changes to update active track points

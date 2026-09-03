@@ -13,7 +13,6 @@ A modern Android application for outdoor tracking and map visualization, built w
   - **Dynamic Variable Resolution**: Intelligent path handling for theme assets using idiomatic Kotlin `resolve` for cross-platform and device-specific safety.
 - **Tour History**: Persistent storage for all recorded tours using **Room Database**, including route visualization and detailed statistics.
 - **Dynamic Statistics**: Live tracking of distance, current speed, elevation gain, and altitude profile.
-- **Eco Mode**: Battery-optimized tracking mode for long-duration tours.
 - **Adaptive UI**: Built with Material 3 and Jetpack Compose for a modern, responsive user experience.
 
 ## 🛠️ Tech Stack

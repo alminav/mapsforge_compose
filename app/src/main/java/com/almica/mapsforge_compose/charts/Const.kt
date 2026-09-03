@@ -18,6 +18,7 @@ class Const {
         const val UC_THREEDOTS: String = "\u2026"
         const val GRADIENT_UP_UC: String = "\u2197"
         const val GRADIENT_DOWN_UC: String = "\u2198"
+        const val ELEVATION_DIFFERENCE_UC: String = "\u2336"
         const val KM_TO_MILES: Double = 0.621371192
         const val TIME_PATTERN_LONG: String = "yyMMdd_HHmmss"
         const val GMS_TAG: String = "gms"

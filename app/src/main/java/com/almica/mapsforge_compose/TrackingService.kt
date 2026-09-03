@@ -38,9 +38,6 @@ class TrackingService : Service(), SensorEventListener {
         val locationFlow = MutableSharedFlow<RoutePoint>(replay = 1)
         val currentTrackPoints = mutableListOf<RoutePoint>()
         
-        private val _isEcoMode = MutableStateFlow(false)
-        val isEcoMode = _isEcoMode.asStateFlow()
-        
         private val _statsFlow = MutableStateFlow(TourStatistics())
         val statsFlow = _statsFlow.asStateFlow()
     }
@@ -92,18 +89,6 @@ class TrackingService : Service(), SensorEventListener {
         gpsJob?.cancel()
         gpsJob = serviceScope.launch {
             locationClient.getAdaptiveLocationUpdates(intervalMs).collect { locationData ->
-                val currentSpeed = _statsFlow.value.currentSpeedKmh
-                
-                if (currentSpeed == 0.0 && !_isEcoMode.value) {
-                    _isEcoMode.value = true
-                    startGpsTracking(60000L) 
-                    return@collect
-                } else if (currentSpeed > 1.5 && _isEcoMode.value) {
-                    _isEcoMode.value = false
-                    startGpsTracking(3000L)
-                    return@collect
-                }
-
                 val correction = settings.getAltitudeCorrection()
                 val baseAltitude = locationData.mslAltitude ?: locationData.altitude
                 processNewLocation(RoutePoint(locationData.latitude,

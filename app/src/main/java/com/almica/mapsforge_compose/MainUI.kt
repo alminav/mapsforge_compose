@@ -64,7 +64,6 @@ fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val gpsLocation by viewModel.locationFlow.collectAsStateWithLifecycle(initialValue = null)
     val tourStats by viewModel.statsFlow.collectAsStateWithLifecycle()
-    val isEcoActive by viewModel.isEcoMode.collectAsStateWithLifecycle()
     var showGradientChart by remember { mutableStateOf(false) }
     var showElevationChart by remember { mutableStateOf(false) }
     
@@ -106,7 +105,6 @@ fun MainScreen(viewModel: MainViewModel) {
                 context = context,
                 gpsLocation = gpsLocation,
                 stats = tourStats,
-                isEcoActive = isEcoActive,
                 onMove = viewModel::setTargetPosition,
                 onZoomChanged = viewModel::setZoomLevel,
                 onStartTracking = { viewModel.startTracking(context) },
@@ -355,7 +353,6 @@ fun MapViewContainer(
     context: Context,
     gpsLocation: RoutePoint?,
     stats: TourStatistics,
-    isEcoActive: Boolean,
     onMove: (LatLong?) -> Unit,
     onZoomChanged: (Int) -> Unit,
     onStartTracking: () -> Unit,
@@ -399,7 +396,6 @@ fun MapViewContainer(
         mapControls = {
             MapControls(
                 isTrackingActive = uiState.isTrackingActive,
-                isEcoActive = isEcoActive,
                 currentLocation = gpsLocation,
                 stats = stats,
                 hasTrack = uiState.loadedTrackPoints.isNotEmpty(),
@@ -582,7 +578,6 @@ fun DownloadOverlay(message: String, progress: Float) {
 @Composable
 fun MapControls(
     isTrackingActive: Boolean,
-    isEcoActive: Boolean,
     currentLocation: RoutePoint?,
     stats: TourStatistics,
     hasTrack: Boolean,
@@ -714,7 +709,6 @@ fun MapControls(
 
     MapControlsContent(
         isTrackingActive = isTrackingActive,
-        isEcoActive = isEcoActive,
         followGps = followGps,
         hasTrack = hasTrack,
         stats = stats,
@@ -755,7 +749,6 @@ fun MapControls(
 @Composable
 fun MapControlsContent(
     isTrackingActive: Boolean,
-    isEcoActive: Boolean,
     followGps: Boolean,
     hasTrack: Boolean,
     stats: TourStatistics,
@@ -911,17 +904,6 @@ fun MapControlsContent(
             }
         }
 
-        if (isEcoActive) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
-                modifier = Modifier
-                    .padding(top = 60.dp)
-                    .align(Alignment.TopCenter)
-            ) {
-                Text(stringResource(R.string.eco_mode_active), modifier = Modifier.padding(8.dp))
-            }
-        }
-
         if (isTrackingActive) {
             StatisticsOverlay(
                 stats = stats,
@@ -999,7 +981,6 @@ fun MainScreenPreview() {
                 mapControls = {
                     MapControlsContent(
                         isTrackingActive = true,
-                        isEcoActive = false,
                         followGps = true,
                         hasTrack = true,
                         stats = TourStatistics(

@@ -10,5 +10,6 @@ plugins {
 configure<org.gradle.plugins.ide.idea.model.IdeaModel> {
     module {
         excludeDirs.add(file("backups"))
+        excludeDirs.add(file("app/src/main/res/mipmap-hdpi"))
     }
 }
