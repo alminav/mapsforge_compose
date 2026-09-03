@@ -23,8 +23,6 @@ import kotlin.math.sinh
 import kotlin.math.sqrt
 
 class LatLngH {
-    var instructionText: String? = null
-    var instructionName: String? = null
     constructor(latitude: Double, longitude: Double) : this(LatLng(latitude, longitude), 0.0)
     var latLng: LatLng
     var latLngGms: LatLng
@@ -341,14 +339,24 @@ fun List<RoutePoint>.toKmlString(name: String?): String {
 fun List<RoutePoint>.toDataPoints() : List<DataPoint> {
     var cumulativeDistance = 0.0
     return this.mapIndexed { index, routePoint ->
+        var speedKmPerHour = 0f
         if (index > 0) {
             val prev = this[index - 1]
-            cumulativeDistance += SphericalUtil.computeDistanceBetween(
+            val distanceMeters = SphericalUtil.computeDistanceBetween(
                 LatLng(prev.latitude, prev.longitude),
                 LatLng(routePoint.latitude, routePoint.longitude)
             )
+            cumulativeDistance += distanceMeters
+
+            val timeDeltaMillis = routePoint.time - prev.time
+            if (timeDeltaMillis > 0) {
+                val speedMetersPerSecond = distanceMeters / (timeDeltaMillis / 1000.0)
+                speedKmPerHour = (speedMetersPerSecond * 3.6).toFloat()
+            }
         }
         DataPoint(0.001f * cumulativeDistance.toFloat(),
-            routePoint.altitude.toFloat(), routePoint.latitude, routePoint.longitude)
+            routePoint.altitude.toFloat(), routePoint.latitude, routePoint.longitude, routePoint.time).apply {
+            this.speedKmPerHour = speedKmPerHour
+        }
     }
 }

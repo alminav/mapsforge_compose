@@ -16,6 +16,7 @@ class Const {
         const val UC_CLOSE: String = "\u2716"
         const val UC_CHECKMARK: String = "\u2713"
         const val UC_THREEDOTS: String = "\u2026"
+        const val UC_AVG: String = "\u2300"
         const val GRADIENT_UP_UC: String = "\u2197"
         const val GRADIENT_DOWN_UC: String = "\u2198"
         const val ELEVATION_DIFFERENCE_UC: String = "\u2336"

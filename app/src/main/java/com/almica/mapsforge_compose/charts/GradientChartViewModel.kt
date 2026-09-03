@@ -135,29 +135,22 @@ class GradientChartViewModel : ViewModel() {
 
     private fun updateDataPoint() {
         val state = _uiState.value
-        if (state is GradientChartUiState.Success && state.latLng != null) {
-            val pointer = state.points.indices.minByOrNull { index ->
-                val point = state.points[index]
-                MapUtils.calculateHaversineDistance(
-                    LatLng(state.latLng.latitude, state.latLng.longitude),
-                    LatLng(point.latitude, point.longitude)
-                )
-            } ?: -1
-            /**
-             * 20aug2026 heading check removed
-            val pointer = nearestRoutePoint(
-            state.locationBearing.toDouble(),
-            state.latLng,
-            state.points
-            )
-             */
-            if (pointer != state.dataModel.routePointer) {
-                // label = if ((i-1)==routePointer) Const.UC_ARROW_UP
+        if (state !is GradientChartUiState.Success || state.latLng == null) return
 
-                state.dataModel.routePointer = pointer
-                val routeDistance = state.distances.lastOrNull() ?: 0.0
-                state.dataModel.sliderPosition = pointer.toFloat() + 0.5f
-                state.dataModel.barChartData = generateGradientChart(state.points, pointer, routeDistance)
+        val currentLocation = state.latLng
+
+        val nearestIndex = state.points.indices.minByOrNull { index ->
+            SphericalUtil.computeDistanceBetween(currentLocation, state.points[index].latLng)
+        } ?: -1
+
+        if (nearestIndex != state.dataModel.routePointer) {
+            val totalRouteDistance = state.distances.lastOrNull() ?: 0.0
+
+            state.dataModel.apply {
+                routePointer = nearestIndex
+                // 0.5f offset to center the slider on the chart bar representing the segment
+                sliderPosition = nearestIndex.toFloat() + 0.5f
+                barChartData = generateGradientChart(state.points, nearestIndex, totalRouteDistance)
             }
         }
     }

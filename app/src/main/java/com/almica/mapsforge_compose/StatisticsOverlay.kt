@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -22,7 +23,9 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun StatisticsOverlay(
     stats: TourStatistics,
-    modifier: Modifier = Modifier
+    onShowActiveElevationChart: () -> Unit,
+    modifier: Modifier = Modifier,
+    onShowActiveSpeedChart: () -> Unit
 ) {
     val context = LocalContext.current
     val hasPressureSensor = remember(context) {
@@ -52,7 +55,8 @@ fun StatisticsOverlay(
             )
             StatItem(
                 label = stringResource(R.string.stat_label_speed),
-                value = stringResource(R.string.stat_format_kmh, stats.currentSpeedKmh)
+                value = stringResource(R.string.stat_format_kmh, stats.currentSpeedKmh),
+                onClick = { onShowActiveSpeedChart() }
             )
             if (hasPressureSensor) {
                 StatItem(
@@ -62,17 +66,20 @@ fun StatisticsOverlay(
             }
             StatItem(
                 label = stringResource(R.string.stat_label_altitude),
-                value = stringResource(R.string.stat_format_meters, stats.currentAltitudeMeters)
+                value = stringResource(R.string.stat_format_meters, stats.currentAltitudeMeters),
+                onClick = { onShowActiveElevationChart() }
             )
         }
     }
 }
 
 @Composable
-fun RowScope.StatItem(label: String, value: String) {
+fun RowScope.StatItem(label: String, value: String, onClick: (() -> Unit)? = null) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.weight(1f)
+        modifier = Modifier
+            .weight(1f)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         Text(
             text = label,

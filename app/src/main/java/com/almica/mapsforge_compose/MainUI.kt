@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.almica.mapsforge_compose.charts.ElevationChart
 import com.almica.mapsforge_compose.charts.GradientChart
 import com.almica.mapsforge_compose.charts.RouteEntity
+import com.almica.mapsforge_compose.charts.SpeedChart
 import com.almica.mapsforge_compose.charts.toDataPoints
 import com.almica.mapsforge_compose.charts.toKmlString
 import com.almica.mapsforge_compose.gh.GhHelper.Locomotion
@@ -66,6 +67,8 @@ fun MainScreen(viewModel: MainViewModel) {
     val tourStats by viewModel.statsFlow.collectAsStateWithLifecycle()
     var showGradientChart by remember { mutableStateOf(false) }
     var showElevationChart by remember { mutableStateOf(false) }
+    var showActiveElevationChart by remember { mutableStateOf(false) }
+    var showActiveSpeedChart by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -92,10 +95,15 @@ fun MainScreen(viewModel: MainViewModel) {
         mapFileExists = uiState.mapFileExists,
         loadedTrackPoints = uiState.loadedTrackPoints,
         loadedTrackName = uiState.loadedTrackName,
+        activeTrackPoints = uiState.activeTrackPoints,
         showGradientChart = showGradientChart,
         onDismissGradientChart = { showGradientChart = false },
         showElevationChart = showElevationChart,
+        showActiveElevationChart = showActiveElevationChart,
+        showActiveSpeedChart = showActiveSpeedChart,
         onDismissElevationChart = { showElevationChart = false },
+        onDismissActiveElevationChart = { showActiveElevationChart = false },
+        onDismissActiveSpeedChart = { showActiveSpeedChart = false },
         snackbarHostState = snackbarHostState,
         onMove = viewModel::setTargetPosition,
         targetPosition = uiState.targetPosition,
@@ -128,6 +136,11 @@ fun MainScreen(viewModel: MainViewModel) {
                 },
                 onShowGradientChart = { showGradientChart = true },
                 onShowElevationChart = { showElevationChart = true },
+                onShowActiveElevationChart = { showActiveElevationChart = true },
+                onShowActiveSpeedChart = {
+                    showActiveSpeedChart = true
+                    Timber.i("showActiveSpeedChart = true")
+                },
                 onPoiClick = { poi ->
                     viewModel.setTargetPosition(LatLong(poi.latitude, poi.longitude))
                     scope.launch {
@@ -147,7 +160,8 @@ fun MainScreen(viewModel: MainViewModel) {
                         val folder = uiState.selectedGraphHopperFolder
                         val locomotionKey = uiState.selectedLocomotionKey
                         if (folder != null) {
-                            val desc = resources.getString(Locomotion.fromKey(locomotionKey).descriptionRes)
+                            val desc =
+                                resources.getString(Locomotion.fromKey(locomotionKey).descriptionRes)
                             snackbarHostState.showSnackbar(
                                 message = "$folder $desc",
                                 duration = SnackbarDuration.Short
@@ -163,7 +177,8 @@ fun MainScreen(viewModel: MainViewModel) {
                         val folder = uiState.selectedGraphHopperFolder
                         val locomotionKey = uiState.selectedLocomotionKey
                         if (folder != null) {
-                            val desc = resources.getString(Locomotion.fromKey(locomotionKey).descriptionRes)
+                            val desc =
+                                resources.getString(Locomotion.fromKey(locomotionKey).descriptionRes)
                             snackbarHostState.showSnackbar(
                                 message = "$folder $desc",
                                 duration = SnackbarDuration.Short
@@ -244,7 +259,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 }
             )
-        }
+        },
     )
 }
 
@@ -266,8 +281,13 @@ fun MainScreenContent(
     showGradientChart: Boolean,
     onDismissGradientChart: () -> Unit,
     showElevationChart: Boolean,
+    showActiveSpeedChart: Boolean,
+    showActiveElevationChart: Boolean,
     onDismissElevationChart: () -> Unit,
+    onDismissActiveElevationChart: () -> Unit,
     targetPosition: LatLong? = null,
+    activeTrackPoints: List<RoutePoint>,
+    onDismissActiveSpeedChart: () -> Unit,
 ) {
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -285,6 +305,8 @@ fun MainScreenContent(
                         scaffoldState = scaffoldState,
                         sheetPeekHeight = if (showGradientChart && loadedTrackPoints.isNotEmpty()) 120.dp
                             else if (showElevationChart && loadedTrackPoints.isNotEmpty()) 200.dp
+                            else if (showActiveElevationChart && activeTrackPoints.isNotEmpty()) 200.dp
+                            else if (showActiveSpeedChart && activeTrackPoints.isNotEmpty()) 200.dp
                             else 0.dp,
                         sheetContent = {
                             if (showGradientChart && loadedTrackPoints.isNotEmpty()) {
@@ -306,6 +328,7 @@ fun MainScreenContent(
                             if (showElevationChart && loadedTrackPoints.isNotEmpty()) {
                                 ElevationChart(
                                     dataPoints = loadedTrackPoints.toDataPoints(),
+                                    titleExtension = loadedTrackName,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(200.dp),
@@ -316,7 +339,32 @@ fun MainScreenContent(
                                     currentLatLng = targetPosition?.let { LatLng(it.latitude, it.longitude) }
                                 )
                             }
-
+                            if (showActiveSpeedChart && activeTrackPoints.isNotEmpty()) {
+                                SpeedChart(
+                                    dataPoints = activeTrackPoints.toDataPoints(),
+                                    titleExtension = stringResource(R.string.active),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
+                                    onPointSelected = {dataPoint ->
+                                        dataPoint?.let { onMove(LatLong(dataPoint.latitude, dataPoint.longitude)) }},
+                                    onClose = onDismissActiveSpeedChart,
+                                    currentLatLng = null //targetPosition?.let { LatLng(it.latitude, it.longitude) }
+                                )
+                            }
+                            if (showActiveElevationChart && activeTrackPoints.isNotEmpty()) {
+                                ElevationChart(
+                                    dataPoints = activeTrackPoints.toDataPoints(),
+                                    titleExtension = stringResource(R.string.active),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
+                                    onPointSelected = {dataPoint ->
+                                        dataPoint?.let { onMove(LatLong(dataPoint.latitude, dataPoint.longitude)) }},
+                                    onClose = onDismissActiveElevationChart,
+                                    currentLatLng = null //targetPosition?.let { LatLng(it.latitude, it.longitude) }
+                                )
+                            }
                             /*
                                                         Box(
                                                             Modifier
@@ -365,6 +413,8 @@ fun MapViewContainer(
     onRouteAppend: () -> Unit,
     onShowGradientChart: () -> Unit,
     onShowElevationChart: () -> Unit,
+    onShowActiveElevationChart: () -> Unit,
+    onShowActiveSpeedChart: () -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -416,6 +466,8 @@ fun MapViewContainer(
                 onClearTrack = onClearTrack,
                 onShowGradientChart = onShowGradientChart,
                 onShowElevationChart = onShowElevationChart,
+                onShowActiveElevationChart = onShowActiveElevationChart,
+                onShowActiveSpeedChart = onShowActiveSpeedChart,
                 omRouteAppend = onRouteAppend,
                 onHistoryClick = onHistoryClick,
                 onSettingsClick = onSettingsClick,
@@ -600,7 +652,9 @@ fun MapControls(
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onCalculateRoute: (Double, Double, Double, Double) -> Unit,
-    onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit
+    onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit,
+    onShowActiveElevationChart: () -> Unit,
+    onShowActiveSpeedChart: () -> Unit
 ) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -742,6 +796,8 @@ fun MapControls(
         onSaveTrackClick = { showSaveTrackDialog = true },
         onShowGradientChart = onShowGradientChart,
         onShowElevationChart = onShowElevationChart,
+        onShowActiveElevationChart = onShowActiveElevationChart,
+        onShowActiveSpeedChart = onShowActiveSpeedChart,
         omRouteAppend = omRouteAppend,
     )
 }
@@ -763,7 +819,9 @@ fun MapControlsContent(
     onSaveTrackClick: () -> Unit,
     onShowGradientChart: () -> Unit,
     omRouteAppend: () -> Unit,
-    onShowElevationChart: () -> Unit
+    onShowElevationChart: () -> Unit,
+    onShowActiveElevationChart: () -> Unit,
+    onShowActiveSpeedChart: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -907,7 +965,13 @@ fun MapControlsContent(
         if (isTrackingActive) {
             StatisticsOverlay(
                 stats = stats,
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
+                onShowActiveElevationChart = {
+                    onShowActiveElevationChart()
+                }, onShowActiveSpeedChart = {
+                    onShowActiveSpeedChart()
+                    Timber.i("onShowActiveSpeedChart")
+                }
             )
         }
     }
@@ -958,8 +1022,6 @@ fun MainScreenPreview() {
         ),
         snackbarHostState = remember { SnackbarHostState() },
         onMove = {},
-        showGradientChart = false,
-        onDismissGradientChart = {},
         mapViewContainer = {
             MapViewContainerContent(
                 mapFileExists = true,
@@ -1000,6 +1062,8 @@ fun MainScreenPreview() {
                         onSaveTrackClick = {},
                         onShowGradientChart = {},
                         onShowElevationChart = {},
+                        onShowActiveElevationChart = {},
+                        onShowActiveSpeedChart = {},
                         omRouteAppend = {}
                     )
                 }
@@ -1008,7 +1072,14 @@ fun MainScreenPreview() {
         tourHistoryScreen = {},
         settingsScreen = {},
         loadedTrackName = "Loaded Track",
+        showGradientChart = false,
+        onDismissGradientChart = {},
         showElevationChart = false,
-        onDismissElevationChart = { }
+        onDismissElevationChart = { },
+        onDismissActiveElevationChart = {},
+        onDismissActiveSpeedChart = {},
+        activeTrackPoints = emptyList(),
+        showActiveElevationChart = false,
+        showActiveSpeedChart = false,
     )
 }

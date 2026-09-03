@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -33,7 +34,7 @@ import kotlin.math.ceil
 import com.almica.mapsforge_compose.R
 
 @Composable
-fun ElevationChart(
+fun SpeedChart(
     modifier: Modifier = Modifier,
     dataPoints: List<DataPoint>,
     titleExtension: String?,
@@ -48,7 +49,7 @@ fun ElevationChart(
     currentLatLng: LatLng? = null
 ) {
 
-    Timber.i("ElevationChart: ${dataPoints.size}")
+    Timber.i("SpeedChart: ${dataPoints.size}")
     if (dataPoints.isEmpty()) {
         Text(stringResource(R.string.elevation_chart_no_data), modifier = modifier.padding(16.dp))
         return
@@ -74,10 +75,11 @@ fun ElevationChart(
 
     // Daten-Extrema
     val maxDist = dataPoints.last().distanceKm
-    val elevations = dataPoints.map { it.elevationMeters }
-    val maxElev = elevations.maxOrNull() ?: 0f
-    val minElev = elevations.minOrNull() ?: 0f
-    val elevRange = (maxElev - minElev).coerceAtLeast(1f)
+    val speeds = dataPoints.map { it.speedKmPerHour }
+    val maxSpeed = speeds.maxOrNull() ?: 0f
+    val minSpeed = speeds.minOrNull() ?: 0f
+    val speedRange = (maxSpeed - minSpeed).coerceAtLeast(1f)
+    val avgSpeed = 3600000 * dataPoints.last().distanceKm / (dataPoints.last().time - dataPoints.first().time)
 
     // Intervall-Berechnungen
     val intervalKm = when {
@@ -87,12 +89,12 @@ fun ElevationChart(
         maxDist <= 100 -> 10f
         else -> 20f
     }
-    val intervalElev = when {
-        elevRange <= 150 -> 20f
-        elevRange <= 400 -> 50f
-        elevRange <= 1000 -> 100f
-        elevRange <= 2000 -> 200f
-        else -> 500f
+    val intervalSpeed = when {
+        speedRange <= 10 -> 2f
+        speedRange <= 25 -> 5f
+        speedRange <= 50 -> 10f
+        speedRange <= 100 -> 20f
+        else -> 50f
     }
 
     // Hilfsfunktion: Findet den Datenpunkt, der am nächsten an der berührten X-Distanz liegt (optimiert mit Binary Search)
@@ -124,16 +126,16 @@ fun ElevationChart(
         onPointSelected(selectedPoint)
     }
 
-    val baseTitle = stringResource(R.string.elevation_chart_title)
+    val baseTitle = stringResource(R.string.speed_chart_title)
     val displayTitle = remember(baseTitle, titleExtension) {
         if (titleExtension != null) "$baseTitle $titleExtension" else baseTitle
     }
 
-    val metersFormat = stringResource(R.string.stat_format_meters)
+    val speedFormat = stringResource(R.string.stat_format_kmh)
 
     Column(modifier = modifier.padding(16.dp)) {
         // Obere Info-Zeile
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = displayTitle,
                 style = MaterialTheme.typography.titleSmall,
@@ -150,9 +152,9 @@ fun ElevationChart(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(text = stringResource(R.string.elevation_chart_min, minElev.toInt()), fontSize = 14.sp, color = labelColor, fontWeight = FontWeight.Bold)
-            Text(text = stringResource(R.string.elevation_chart_max, maxElev.toInt()), fontSize = 14.sp, color = labelColor, fontWeight = FontWeight.Bold)
-            Text(text = stringResource(R.string.elevation_chart_total, maxDist), fontSize = 14.sp, color = labelColor, fontWeight = FontWeight.Bold)
+            Text(text = stringResource(R.string.speed_chart_min, minSpeed), fontSize = 14.sp, color = labelColor, fontWeight = FontWeight.Bold)
+            Text(text = stringResource(R.string.speed_chart_max, maxSpeed), fontSize = 14.sp, color = labelColor, fontWeight = FontWeight.Bold)
+            Text(text = stringResource(R.string.speed_average, avgSpeed), fontSize = 14.sp, color = labelColor, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -196,13 +198,13 @@ fun ElevationChart(
             // ==========================================
             // 1. Y-ACHSE & HORIZONTALE LINIEN
             // ==========================================
-            val startElevLabel =
-                ceil(minElev / intervalElev) * intervalElev - intervalElev
-            var currentElev = startElevLabel
-            while (currentElev <= maxElev) {
-                if (currentElev >= minElev) {
-                    val relativeElev = (currentElev - minElev) / elevRange
-                    val y = chartHeight - (relativeElev * chartHeight)
+            val startSpeedLabel =
+                ceil(minSpeed / intervalSpeed) * intervalSpeed - intervalSpeed
+            var currentSpeed = startSpeedLabel
+            while (currentSpeed <= maxSpeed) {
+                if (currentSpeed >= minSpeed) {
+                    val relativeSpeed = (currentSpeed - minSpeed) / speedRange
+                    val y = chartHeight - (relativeSpeed * chartHeight)
 
                     drawLine(
                         color = gridColor,
@@ -211,19 +213,19 @@ fun ElevationChart(
                         strokeWidth = 1.dp.toPx()
                     )
 
-                    val elevText = metersFormat.format(currentElev)
-                    val textLayout = textMeasurer.measure(elevText, style = labelStyle)
+                    val speedText = "%.0f".format(currentSpeed) // simplified for Y axis
+                    val textLayout = textMeasurer.measure(speedText, style = labelStyle)
                     val textY = y - (textLayout.size.height / 2)
                     val textX = yAxisWidth - textLayout.size.width - 6.dp.toPx()
 
                     drawText(
                         textMeasurer,
-                        elevText,
+                        speedText,
                         style = labelStyle,
                         topLeft = Offset(textX.coerceAtLeast(0f), textY)
                     )
                 }
-                currentElev += intervalElev
+                currentSpeed += intervalSpeed
             }
 
             // ==========================================
@@ -264,8 +266,8 @@ fun ElevationChart(
 
             dataPoints.forEachIndexed { index, point ->
                 val x = yAxisWidth + ((point.distanceKm / maxDist) * chartWidth)
-                val relativeElev = (point.elevationMeters - minElev) / elevRange
-                val y = chartHeight - (relativeElev * chartHeight)
+                val relativeSpeed = (point.speedKmPerHour - minSpeed) / speedRange
+                val y = chartHeight - (relativeSpeed * chartHeight)
 
                 if (index == 0) {
                     strokePath.moveTo(x, y)
@@ -299,8 +301,8 @@ fun ElevationChart(
             selectedPoint?.let { point ->
                 // Berechne X/Y-Koordinaten des gewählten Punkts auf dem Canvas
                 val indicatorX = yAxisWidth + ((point.distanceKm / maxDist) * chartWidth)
-                val relativeElev = (point.elevationMeters - minElev) / elevRange
-                val indicatorY = chartHeight - (relativeElev * chartHeight)
+                val relativeSpeed = (point.speedKmPerHour - minSpeed) / speedRange
+                val indicatorY = chartHeight - (relativeSpeed * chartHeight)
 
                 // Vertikale Indikatorlinie zeichnen
                 drawLine(
@@ -321,7 +323,7 @@ fun ElevationChart(
                 )
                 // Pop-up-Box (Tooltip) Text vorbereiten
                 val tooltipText =
-                    "%.1f km | ${point.elevationMeters.toInt()}m".format(point.distanceKm)
+                    "%.1f km | %.1f km/h".format(point.distanceKm, point.speedKmPerHour)
                 val textLayout = textMeasurer.measure(tooltipText, style = tooltipStyle)
                 val paddingX = 8.dp.toPx()
                 val paddingY = 4.dp.toPx()
@@ -349,22 +351,22 @@ fun ElevationChart(
 
 @Preview(showBackground = true)
 @Composable
-fun ElevationChartPreview() {
+fun SpeedChartPreview() {
     val sampleDataPoints = listOf(
-        DataPoint(0f, 100f, 0.0, 0.0),
-        DataPoint(1f, 150f, 0.0, 0.0),
-        DataPoint(2f, 120f, 0.0, 0.0),
-        DataPoint(3f, 180f, 0.0, 0.0),
-        DataPoint(4f, 140f, 0.0, 0.0),
-        DataPoint(5f, 160f, 0.0, 0.0),
-        DataPoint(6f, 110f, 0.0, 0.0),
-        DataPoint(7f, 130f, 0.0, 0.0),
-        DataPoint(8f, 170f, 0.0, 0.0),
-        DataPoint(9f, 190f, 0.0, 0.0),
-        DataPoint(10f, 150f, 0.0, 0.0)
+        DataPoint(0f, 100f, 0.0, 0.0, 0, 10f),
+        DataPoint(1f, 150f, 0.0, 0.0, 0, 15f),
+        DataPoint(2f, 120f, 0.0, 0.0, 0, 12f),
+        DataPoint(3f, 180f, 0.0, 0.0, 0, 20f),
+        DataPoint(4f, 140f, 0.0, 0.0, 0, 18f),
+        DataPoint(5f, 160f, 0.0, 0.0, 0, 25f),
+        DataPoint(6f, 110f, 0.0, 0.0, 0, 22f),
+        DataPoint(7f, 130f, 0.0, 0.0, 0, 28f),
+        DataPoint(8f, 170f, 0.0, 0.0, 0, 30f),
+        DataPoint(9f, 190f, 0.0, 0.0, 0, 25f),
+        DataPoint(10f, 150f, 0.0, 0.0, 0, 15f)
     )
     RamaniTheme {
-        ElevationChart(
+        SpeedChart(
             dataPoints = sampleDataPoints,
             modifier = Modifier
                 .fillMaxWidth()
@@ -373,4 +375,3 @@ fun ElevationChartPreview() {
         )
     }
 }
-

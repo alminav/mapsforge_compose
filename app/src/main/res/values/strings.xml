@@ -71,6 +71,11 @@
     <string name="elevation_chart_max">Max %1$d m</string>
     <string name="elevation_chart_total">Total %1$.1f km</string>
     <string name="elevation_chart_no_data">no valid data for chart</string>
-    <string name="elevation_chart_title">Elevation chart</string>
+    <string name="elevation_chart_title">Elevation Chart</string>
+    <string name="speed_chart_title">Speed Chart</string>
+    <string name="speed_chart_min">Min %1$.1f km/h</string>
+    <string name="speed_chart_max">Max %1$.1f km/h</string>
     <string name="difference_in_elevation">Difference in elevation</string>
+    <string name="active">Active</string>
+    <string name="speed_average">\u2300 %1$.1f km/h</string>
 </resources>
