@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -341,7 +343,7 @@ fun GeneralSettingsTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(text = "Höhenkorrektur", style = MaterialTheme.typography.bodyLarge)
                         Text(text = "Aktueller Wert: $altitudeCorrection m", style = MaterialTheme.typography.bodySmall)
                     }
@@ -464,25 +466,36 @@ fun MapSettingsTab(
 
         item {
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 items(RenderThemes.AVAILABLE_THEMES) { theme ->
                     val selected = selectedThemeId == theme.id && themeFilePath == null
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onThemeSelected(theme.id) },
-                        label = { Text(theme.displayName) },
-                        leadingIcon = if (selected) {
-                            {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                )
-                            }
-                        } else null
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        FilterChip(
+                            selected = selected,
+                            onClick = { onThemeSelected(theme.id) },
+                            label = { Text(theme.displayName) },
+                            leadingIcon = if (selected) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                    )
+                                }
+                            } else null
+                        )
+                        val themePreview = RenderPreviews.AVAILABLE_PREVIEWS.find { it.id == theme.id }
+                        if (themePreview != null) {
+                            Image(
+                                painter = painterResource(themePreview.imageResId),
+                                contentDescription = null,
+                                modifier = Modifier.size(120.dp),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -541,7 +554,7 @@ fun RoutingSettingsTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(text = "Roundtrip Faktor", style = MaterialTheme.typography.bodyLarge)
                         Text(text = "Aktueller Wert: $roundtripFactor", style = MaterialTheme.typography.bodySmall)
                     }
@@ -561,7 +574,7 @@ fun RoutingSettingsTab(
 
         item {
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 items(GhHelper.Locomotion.entries) { locomotion ->

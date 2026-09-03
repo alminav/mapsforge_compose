@@ -39,6 +39,21 @@ object RenderThemes {
     )
 }
 
+data class RenderPreview(
+    val id: String,
+    val imageResId: Int
+)
+object RenderPreviews {
+    val AVAILABLE_PREVIEWS = listOf(
+        RenderPreview("cruiser", R.mipmap.screenshot_cruiser),
+        RenderPreview("mapsforge", R.mipmap.screenshot_mapsforge),
+        RenderPreview("outdooractive", R.mipmap.screenshot_outdooractive),
+        RenderPreview("contrast", R.mipmap.screenshot_contrast),
+        RenderPreview("outdoor", R.mipmap.screenshot_outdoor),
+        RenderPreview("simplyhike", R.mipmap.screenshot_simplyhike)
+    )
+}
+
 class SettingsRepository(context: Context) {
     private val sharedPreferences = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
     private val defaultPrefs = PreferenceManager.getDefaultSharedPreferences(context)

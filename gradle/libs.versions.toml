@@ -20,6 +20,7 @@ timber = "5.0.1"
 googleMapsUtilsVersion = "5.1.1"
 preference = "1.2.1"
 gson = "2.14.0"
+kotlinxCollectionsImmutable = "0.5.2"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -54,6 +55,7 @@ slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 googleMapsUtils = { module = "com.google.maps.android:android-maps-utils", version.ref = "googleMapsUtilsVersion" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version.ref = "kotlinxCollectionsImmutable" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

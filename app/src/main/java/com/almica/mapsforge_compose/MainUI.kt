@@ -21,7 +21,6 @@ import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.LocationDisabled
 import androidx.compose.material.icons.filled.Remove
@@ -29,7 +28,9 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.AddLocation
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.LineAxis
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
@@ -40,14 +41,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.almica.mapsforge_compose.charts.ElevationChart
 import com.almica.mapsforge_compose.charts.GradientChart
 import com.almica.mapsforge_compose.charts.RouteEntity
+import com.almica.mapsforge_compose.charts.toDataPoints
 import com.almica.mapsforge_compose.charts.toKmlString
 import com.almica.mapsforge_compose.gh.GhHelper.Locomotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.view.MapView
+import com.google.android.gms.maps.model.LatLng
 import timber.log.Timber
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
@@ -62,6 +66,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val tourStats by viewModel.statsFlow.collectAsStateWithLifecycle()
     val isEcoActive by viewModel.isEcoMode.collectAsStateWithLifecycle()
     var showGradientChart by remember { mutableStateOf(false) }
+    var showElevationChart by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -90,8 +95,11 @@ fun MainScreen(viewModel: MainViewModel) {
         loadedTrackName = uiState.loadedTrackName,
         showGradientChart = showGradientChart,
         onDismissGradientChart = { showGradientChart = false },
+        showElevationChart = showElevationChart,
+        onDismissElevationChart = { showElevationChart = false },
         snackbarHostState = snackbarHostState,
         onMove = viewModel::setTargetPosition,
+        targetPosition = uiState.targetPosition,
         mapViewContainer = {
             MapViewContainer(
                 uiState = uiState,
@@ -111,6 +119,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     viewModel.setLoadedTrackPoints(emptyList())
                     viewModel.setLoadedTrackName(null)
                     showGradientChart = false
+                    showElevationChart = false
                 },
                 onRouteAppend = {
                     // We reuse the HISTORY screen to pick a tour to append
@@ -120,6 +129,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     viewModel.setIsAppending(true)
                 },
                 onShowGradientChart = { showGradientChart = true },
+                onShowElevationChart = { showElevationChart = true },
                 onPoiClick = { poi ->
                     viewModel.setTargetPosition(LatLong(poi.latitude, poi.longitude))
                     scope.launch {
@@ -256,7 +266,10 @@ fun MainScreenContent(
     settingsScreen: @Composable () -> Unit,
     loadedTrackName: String?,
     showGradientChart: Boolean,
-    onDismissGradientChart: () -> Unit
+    onDismissGradientChart: () -> Unit,
+    showElevationChart: Boolean,
+    onDismissElevationChart: () -> Unit,
+    targetPosition: LatLong? = null,
 ) {
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -272,7 +285,9 @@ fun MainScreenContent(
                     val scaffoldState = rememberBottomSheetScaffoldState()
                     BottomSheetScaffold(
                         scaffoldState = scaffoldState,
-                        sheetPeekHeight = if (showGradientChart && loadedTrackPoints.isNotEmpty()) 120.dp else 0.dp,
+                        sheetPeekHeight = if (showGradientChart && loadedTrackPoints.isNotEmpty()) 120.dp
+                            else if (showElevationChart && loadedTrackPoints.isNotEmpty()) 200.dp
+                            else 0.dp,
                         sheetContent = {
                             if (showGradientChart && loadedTrackPoints.isNotEmpty()) {
                                 val routeEntity = remember(loadedTrackPoints) {
@@ -290,16 +305,30 @@ fun MainScreenContent(
                                     onDismiss = onDismissGradientChart
                                 )
                             }
-/*
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(128.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Bottom Sheet Content")
+                            if (showElevationChart && loadedTrackPoints.isNotEmpty()) {
+                                ElevationChart(
+                                    dataPoints = loadedTrackPoints.toDataPoints(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
+                                    onPointSelected = {dataPoint ->
+                                        dataPoint?.let { onMove(LatLong(dataPoint.latitude, dataPoint.longitude)) }
+                                    },
+                                    onClose = onDismissElevationChart,
+                                    currentLatLng = targetPosition?.let { LatLng(it.latitude, it.longitude) }
+                                )
                             }
- */
+
+                            /*
+                                                        Box(
+                                                            Modifier
+                                                                .fillMaxWidth()
+                                                                .height(128.dp),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Text("Bottom Sheet Content")
+                                                        }
+                             */
                         },
                         modifier = Modifier.padding(innerPadding),
                         sheetSwipeEnabled = true
@@ -338,6 +367,7 @@ fun MapViewContainer(
     onClearTrack: () -> Unit,
     onRouteAppend: () -> Unit,
     onShowGradientChart: () -> Unit,
+    onShowElevationChart: () -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -389,6 +419,7 @@ fun MapViewContainer(
                 onSaveTrack = onSaveTrack,
                 onClearTrack = onClearTrack,
                 onShowGradientChart = onShowGradientChart,
+                onShowElevationChart = onShowElevationChart,
                 omRouteAppend = onRouteAppend,
                 onHistoryClick = onHistoryClick,
                 onSettingsClick = onSettingsClick,
@@ -570,6 +601,7 @@ fun MapControls(
     onClearTrack: () -> Unit,
     omRouteAppend: () -> Unit,
     onShowGradientChart: () -> Unit,
+    onShowElevationChart: () -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onCalculateRoute: (Double, Double, Double, Double) -> Unit,
@@ -715,7 +747,8 @@ fun MapControls(
         onPoiListClick = { showPoiListDialog = true },
         onSaveTrackClick = { showSaveTrackDialog = true },
         onShowGradientChart = onShowGradientChart,
-        omRouteAppend = omRouteAppend
+        onShowElevationChart = onShowElevationChart,
+        omRouteAppend = omRouteAppend,
     )
 }
 
@@ -736,7 +769,8 @@ fun MapControlsContent(
     onPoiListClick: () -> Unit,
     onSaveTrackClick: () -> Unit,
     onShowGradientChart: () -> Unit,
-    omRouteAppend: () -> Unit
+    omRouteAppend: () -> Unit,
+    onShowElevationChart: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -853,11 +887,18 @@ fun MapControlsContent(
                         leadingIcon = { Icon(Icons.Default.Save, contentDescription = null) }
                     )
                     DropdownMenuItem(
-                        text = { Text("Route Info") },
+                        text = { Text("Gradient Monitor") },
                         onClick = {
                             onShowGradientChart()
                             showTrackMenu = false  },
-                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) }
+                        leadingIcon = { Icon(Icons.Default.BarChart, contentDescription = null) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Elevation Monitor") },
+                        onClick = {
+                            onShowElevationChart()
+                            showTrackMenu = false  },
+                        leadingIcon = { Icon(Icons.Default.LineAxis, contentDescription = null) }
                     )
                     DropdownMenuItem(
                         text = { Text("Route Append") },
@@ -977,6 +1018,7 @@ fun MainScreenPreview() {
                         onPoiListClick = {},
                         onSaveTrackClick = {},
                         onShowGradientChart = {},
+                        onShowElevationChart = {},
                         omRouteAppend = {}
                     )
                 }
@@ -984,6 +1026,8 @@ fun MainScreenPreview() {
         },
         tourHistoryScreen = {},
         settingsScreen = {},
-        loadedTrackName = "Loaded Track"
+        loadedTrackName = "Loaded Track",
+        showElevationChart = false,
+        onDismissElevationChart = { }
     )
 }

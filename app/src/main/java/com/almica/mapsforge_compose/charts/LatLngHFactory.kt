@@ -338,3 +338,17 @@ fun List<RoutePoint>.toKmlString(name: String?): String {
     }
     return xmlwriter.toString()
 }
+fun List<RoutePoint>.toDataPoints() : List<DataPoint> {
+    var cumulativeDistance = 0.0
+    return this.mapIndexed { index, routePoint ->
+        if (index > 0) {
+            val prev = this[index - 1]
+            cumulativeDistance += SphericalUtil.computeDistanceBetween(
+                LatLng(prev.latitude, prev.longitude),
+                LatLng(routePoint.latitude, routePoint.longitude)
+            )
+        }
+        DataPoint(0.001f * cumulativeDistance.toFloat(),
+            routePoint.altitude.toFloat(), routePoint.latitude, routePoint.longitude)
+    }
+}

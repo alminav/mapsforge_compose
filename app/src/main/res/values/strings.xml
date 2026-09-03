@@ -67,4 +67,9 @@
     <string name="cancel">Abbrechen</string>
     <string name="delete">Löschen</string>
     <string name="no_relevant_chart_data">No relevant chart data</string>
+    <string name="elevation_chart_min">Min %1$d m</string>
+    <string name="elevation_chart_max">Max %1$d m</string>
+    <string name="elevation_chart_total">Total %1$.1f km</string>
+    <string name="elevation_chart_no_data">no valid data for chart</string>
+    <string name="elevation_chart_title">Elevation chart</string>
 </resources>
