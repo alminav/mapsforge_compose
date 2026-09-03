@@ -5,6 +5,7 @@
     <string name="tour_close_description">Schließen</string>
     <string name="tour_distance">Distanz: %.2f km</string>
     <string name="tour_elevation">Aufstieg: %.0f m</string>
+    <string name="tour_elevation_difference">Höhendifferenz: %.0f m</string>
     <string name="tour_points">Punkte: %d</string>
 
     <string name="tour_menu_import">Aus KML importieren</string>
@@ -72,4 +73,5 @@
     <string name="elevation_chart_total">Total %1$.1f km</string>
     <string name="elevation_chart_no_data">no valid data for chart</string>
     <string name="elevation_chart_title">Elevation chart</string>
+    <string name="difference_in_elevation">Difference in elevation</string>
 </resources>

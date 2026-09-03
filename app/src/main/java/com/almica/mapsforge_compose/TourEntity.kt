@@ -18,7 +18,19 @@ data class TourEntity(
     val totalDistanceKm: Double,
     val elevationGainMeters: Double,
     val routePoints: List<RoutePoint>
-)
+) {
+    fun calculateElevationDifference(): Double = calculateElevationDifference(routePoints)
+
+    companion object {
+        fun calculateElevationDifference(points: List<RoutePoint>): Double {
+            if (points.isEmpty()) return 0.0
+            val altitudes = points.map { it.altitude }
+            val maxAlt = altitudes.maxOrNull() ?: 0.0
+            val minAlt = altitudes.minOrNull() ?: 0.0
+            return maxAlt - minAlt
+        }
+    }
+}
 
 class RoomTypeConverters {
     @TypeConverter

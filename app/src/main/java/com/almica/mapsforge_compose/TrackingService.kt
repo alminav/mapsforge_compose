@@ -130,6 +130,7 @@ class TrackingService : Service(), SensorEventListener {
         _statsFlow.value = currentStats.copy(
             totalDistanceKm = currentStats.totalDistanceKm + addedDistance,
             currentSpeedKmh = if (computedSpeed < 1.0) 0.0 else computedSpeed,
+            //elevationDifferenceMeters = TourEntity.calculateElevationDifference(currentTrackPoints),
             currentAltitudeMeters = currentAltitudeMeters
         )
         Timber.i("currentAltitudeMeters: $currentAltitudeMeters")

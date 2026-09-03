@@ -11,6 +11,8 @@ import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import android.content.Context
+import android.hardware.Sensor
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
@@ -20,6 +22,7 @@ import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.hardware.SensorManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
@@ -38,6 +41,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Polyline
 import androidx.compose.material.icons.filled.Search
 import com.almica.mapsforge_compose.TourUtils.simplifyToTargetCount
+import com.almica.mapsforge_compose.charts.Const
 
 enum class TourSortOption {
     DATE_DESC, NAME_ASC, DISTANCE_DESC, DISTANCE_ASC, PROXIMITY_ASC
@@ -392,6 +396,12 @@ fun TourHistoryItem(
     var expanded by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+    val hasBarometer = remember {
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        sensorManager?.getDefaultSensor(Sensor.TYPE_PRESSURE) != null
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -413,13 +423,18 @@ fun TourHistoryItem(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(text = stringResource(R.string.tour_distance, tour.totalDistanceKm))
-                    //Text(text = stringResource(R.string.tour_elevation, tour.elevationGainMeters))
+                    if (hasBarometer) {
+                        Text(text = stringResource(R.string.tour_elevation, tour.elevationGainMeters))
+                    } else {
+                        Text(text = String.format(Locale.US,"%s %.0f m", Const.ELEVATION_DIFFERENCE_UC,
+                            tour.calculateElevationDifference()))
+                    }
                     Text(text = stringResource(R.string.tour_points, tour.routePoints.size))
                 }
             }
 
             Box {
-                IconButton(onClick = { expanded = true }) {
+                IconButton(modifier = Modifier.padding(bottom = 24.dp), onClick = { expanded = true }) {
                     Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Options")
                 }
                 DropdownMenu(
