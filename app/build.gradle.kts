@@ -74,6 +74,9 @@ dependencies {
     // Logging
     implementation(libs.timber)
 
+    // Kotlin Collections Immutable
+    implementation(libs.kotlinx.collections.immutable)
+
     // Android Maps Utils
 
     // Preference
