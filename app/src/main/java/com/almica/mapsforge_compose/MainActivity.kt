@@ -8,11 +8,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+        Timber.plant(TimberDebugTree())
         val settingsRepository = SettingsRepository(this)
         val tourDb = TourDatabase.getDatabase(this)
         val poiDb = PoiDatabase.getDatabase(this)

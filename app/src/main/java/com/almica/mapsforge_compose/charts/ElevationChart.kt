@@ -18,7 +18,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -69,30 +71,86 @@ fun ElevationChart(
     }
 
     val textMeasurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(color = labelColor, fontSize = 10.sp)
-    val tooltipStyle = TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    val labelStyle = remember(labelColor) { TextStyle(color = labelColor, fontSize = 10.sp) }
+    val tooltipStyle = remember { TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+
+    val metersFormat = stringResource(R.string.stat_format_meters)
 
     // Daten-Extrema
-    val maxDist = dataPoints.last().distanceKm
-    val elevations = dataPoints.map { it.elevationMeters }
-    val maxElev = elevations.maxOrNull() ?: 0f
-    val minElev = elevations.minOrNull() ?: 0f
-    val elevRange = (maxElev - minElev).coerceAtLeast(1f)
+    val extrema = remember(dataPoints) {
+        val maxDist = dataPoints.lastOrNull()?.distanceKm ?: 0f
+        val elevations = dataPoints.map { it.elevationMeters }
+        val maxElev = elevations.maxOrNull() ?: 0f
+        val minElev = elevations.minOrNull() ?: 0f
+        val elevRange = (maxElev - minElev).coerceAtLeast(1f)
 
-    // Intervall-Berechnungen
-    val intervalKm = when {
-        maxDist <= 5 -> 1f
-        maxDist <= 15 -> 2f
-        maxDist <= 40 -> 5f
-        maxDist <= 100 -> 10f
-        else -> 20f
+        // Intervall-Berechnungen
+        val intervalKm = when {
+            maxDist <= 5 -> 1f
+            maxDist <= 15 -> 2f
+            maxDist <= 40 -> 5f
+            maxDist <= 100 -> 10f
+            else -> 20f
+        }
+        val intervalElev = when {
+            elevRange <= 150 -> 20f
+            elevRange <= 400 -> 50f
+            elevRange <= 1000 -> 100f
+            elevRange <= 2000 -> 200f
+            else -> 500f
+        }
+
+        object {
+            val maxDist = maxDist
+            val maxElev = maxElev
+            val minElev = minElev
+            val elevRange = elevRange
+            val intervalKm = intervalKm
+            val intervalElev = intervalElev
+        }
     }
-    val intervalElev = when {
-        elevRange <= 150 -> 20f
-        elevRange <= 400 -> 50f
-        elevRange <= 1000 -> 100f
-        elevRange <= 2000 -> 200f
-        else -> 500f
+
+    val maxDist = extrema.maxDist
+    val maxElev = extrema.maxElev
+    val minElev = extrema.minElev
+    val elevRange = extrema.elevRange
+    val intervalKm = extrema.intervalKm
+    val intervalElev = extrema.intervalElev
+
+    val density = LocalDensity.current
+    // Pre-calculate Y labels and determine needed width
+    val yAxisInfo = remember(extrema, metersFormat, labelStyle, textMeasurer, density) {
+        val labels = mutableListOf<Triple<Float, String, TextLayoutResult>>()
+        val startElevLabel = ceil(minElev / intervalElev) * intervalElev - intervalElev
+        var currentElev = startElevLabel
+        var maxWidth = 0f
+        while (currentElev <= maxElev) {
+            if (currentElev >= minElev) {
+                val text = metersFormat.format(currentElev)
+                val layout = textMeasurer.measure(text, style = labelStyle)
+                labels.add(Triple(currentElev, text, layout))
+                maxWidth = maxOf(maxWidth, layout.size.width.toFloat())
+            }
+            currentElev += intervalElev
+        }
+        val padding = with(density) { 12.dp.toPx() }
+        labels to (maxWidth + padding)
+    }
+    val yAxisLabels = yAxisInfo.first
+    val yAxisWidthPx = yAxisInfo.second
+
+    val xAxisLabels = remember(extrema, intervalKm, labelStyle, textMeasurer) {
+        val labels = mutableListOf<Pair<Float, TextLayoutResult>>()
+        val numberOfLabels = ceil(maxDist / intervalKm).toInt()
+        for (i in 0..numberOfLabels) {
+            val currentKm = i * intervalKm
+            if (currentKm <= maxDist) {
+                val labelText = "${currentKm.toInt()} km"
+                val textLayout = textMeasurer.measure(labelText, style = labelStyle)
+                labels.add(currentKm to textLayout)
+            }
+        }
+        labels
     }
 
     // Hilfsfunktion: Findet den Datenpunkt, der am nächsten an der berührten X-Distanz liegt (optimiert mit Binary Search)
@@ -129,8 +187,6 @@ fun ElevationChart(
         if (titleExtension != null) "$baseTitle $titleExtension" else baseTitle
     }
 
-    val metersFormat = stringResource(R.string.stat_format_meters)
-
     Column(modifier = modifier.padding(16.dp)) {
         // Obere Info-Zeile
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -163,23 +219,19 @@ fun ElevationChart(
                 .weight(1f)
                 .background(Color.White)
                 // Touch- und Drag-Gesten verarbeiten (kombiniert für bessere Performance und Konsistenz)
-                .pointerInput(dataPoints) {
-                    val yAxisWidth = 45.dp.toPx()
-                    val chartWidth = size.width - yAxisWidth
+                .pointerInput(dataPoints, yAxisWidthPx) {
+                    val chartWidth = size.width - yAxisWidthPx
 
                     awaitPointerEventScope {
                         while (true) {
                             val down = awaitFirstDown()
-                            updateSelectedPoint(down.position.x, chartWidth, yAxisWidth)
+                            updateSelectedPoint(down.position.x, chartWidth, yAxisWidthPx)
 
                             drag(down.id) { change ->
-                                updateSelectedPoint(change.position.x, chartWidth, yAxisWidth)
+                                updateSelectedPoint(change.position.x, chartWidth, yAxisWidthPx)
                                 change.consume()
                             }
-
-                            // Tooltip beim Loslassen ausblenden
-                            selectedPoint = null
-                            onPointSelected(null)
+                            // Selection stays until next touch
                         }
                     }
                 }
@@ -187,73 +239,54 @@ fun ElevationChart(
             val width = size.width
             val height = size.height
 
-            val yAxisWidth = 45.dp.toPx()
             val xAxisHeight = 24.dp.toPx()
 
-            val chartWidth = width - yAxisWidth
+            val chartWidth = width - yAxisWidthPx
             val chartHeight = height - xAxisHeight
 
             // ==========================================
             // 1. Y-ACHSE & HORIZONTALE LINIEN
             // ==========================================
-            val startElevLabel =
-                ceil(minElev / intervalElev) * intervalElev - intervalElev
-            var currentElev = startElevLabel
-            while (currentElev <= maxElev) {
-                if (currentElev >= minElev) {
-                    val relativeElev = (currentElev - minElev) / elevRange
-                    val y = chartHeight - (relativeElev * chartHeight)
+            yAxisLabels.forEach { (elev, text, textLayout) ->
+                val relativeElev = (elev - minElev) / elevRange
+                val y = chartHeight - (relativeElev * chartHeight)
 
-                    drawLine(
-                        color = gridColor,
-                        start = Offset(yAxisWidth, y),
-                        end = Offset(width, y),
-                        strokeWidth = 1.dp.toPx()
-                    )
+                drawLine(
+                    color = gridColor,
+                    start = Offset(yAxisWidthPx, y),
+                    end = Offset(width, y),
+                    strokeWidth = 1.dp.toPx()
+                )
 
-                    val elevText = metersFormat.format(currentElev)
-                    val textLayout = textMeasurer.measure(elevText, style = labelStyle)
-                    val textY = y - (textLayout.size.height / 2)
-                    val textX = yAxisWidth - textLayout.size.width - 6.dp.toPx()
+                val textY = y - (textLayout.size.height.toFloat() / 2)
+                val textX = yAxisWidthPx - textLayout.size.width.toFloat() - 6.dp.toPx()
 
-                    drawText(
-                        textMeasurer,
-                        elevText,
-                        style = labelStyle,
-                        topLeft = Offset(textX.coerceAtLeast(0f), textY)
-                    )
-                }
-                currentElev += intervalElev
+                drawText(
+                    textLayoutResult = textLayout,
+                    topLeft = Offset(textX.coerceAtLeast(0f), textY)
+                )
             }
 
             // ==========================================
             // 2. X-ACHSE & VERTIKALE LINIEN
             // ==========================================
-            val numberOfLabels = ceil(maxDist / intervalKm).toInt()
-            for (i in 0..numberOfLabels) {
-                val currentKm = i * intervalKm
-                if (currentKm <= maxDist) {
-                    val x = yAxisWidth + ((currentKm / maxDist) * chartWidth)
+            xAxisLabels.forEach { (currentKm, textLayout) ->
+                val x = yAxisWidthPx + ((currentKm / maxDist) * chartWidth)
 
-                    drawLine(
-                        color = gridColor,
-                        start = Offset(x, 0f),
-                        end = Offset(x, chartHeight),
-                        strokeWidth = 1.dp.toPx()
-                    )
+                drawLine(
+                    color = gridColor,
+                    start = Offset(x, 0f),
+                    end = Offset(x, chartHeight),
+                    strokeWidth = 1.dp.toPx()
+                )
 
-                    val labelText = "${currentKm.toInt()} km"
-                    val textLayout = textMeasurer.measure(labelText, style = labelStyle)
-                    val textX = x - (textLayout.size.width / 2)
-                    val correctedX = textX.coerceIn(yAxisWidth, width - textLayout.size.width)
+                val textX = x - (textLayout.size.width.toFloat() / 2)
+                val correctedX = textX.coerceIn(yAxisWidthPx, width - textLayout.size.width.toFloat())
 
-                    drawText(
-                        textMeasurer,
-                        labelText,
-                        style = labelStyle,
-                        topLeft = Offset(correctedX, chartHeight + 6.dp.toPx())
-                    )
-                }
+                drawText(
+                    textLayoutResult = textLayout,
+                    topLeft = Offset(correctedX, chartHeight + 6.dp.toPx())
+                )
             }
 
             // ==========================================
@@ -262,24 +295,24 @@ fun ElevationChart(
             val strokePath = Path()
             val gradientPath = Path()
 
-            dataPoints.forEachIndexed { index, point ->
-                val x = yAxisWidth + ((point.distanceKm / maxDist) * chartWidth)
-                val relativeElev = (point.elevationMeters - minElev) / elevRange
-                val y = chartHeight - (relativeElev * chartHeight)
-
-                if (index == 0) {
-                    strokePath.moveTo(x, y)
-                    gradientPath.moveTo(x, y)
-                } else {
-                    strokePath.lineTo(x, y)
-                    gradientPath.lineTo(x, y)
-                }
-            }
-
             if (dataPoints.isNotEmpty()) {
-                val lastX = yAxisWidth + chartWidth
+                dataPoints.forEachIndexed { index, point ->
+                    val x = yAxisWidthPx + ((point.distanceKm / maxDist) * chartWidth)
+                    val relativeElev = (point.elevationMeters - minElev) / elevRange
+                    val y = chartHeight - (relativeElev * chartHeight)
+
+                    if (index == 0) {
+                        strokePath.moveTo(x, y)
+                        gradientPath.moveTo(x, y)
+                    } else {
+                        strokePath.lineTo(x, y)
+                        gradientPath.lineTo(x, y)
+                    }
+                }
+
+                val lastX = yAxisWidthPx + chartWidth
                 gradientPath.lineTo(lastX, chartHeight)
-                gradientPath.lineTo(yAxisWidth, chartHeight)
+                gradientPath.lineTo(yAxisWidthPx, chartHeight)
                 gradientPath.close()
 
                 drawPath(
@@ -298,7 +331,7 @@ fun ElevationChart(
             // ==========================================
             selectedPoint?.let { point ->
                 // Berechne X/Y-Koordinaten des gewählten Punkts auf dem Canvas
-                val indicatorX = yAxisWidth + ((point.distanceKm / maxDist) * chartWidth)
+                val indicatorX = yAxisWidthPx + ((point.distanceKm / maxDist) * chartWidth)
                 val relativeElev = (point.elevationMeters - minElev) / elevRange
                 val indicatorY = chartHeight - (relativeElev * chartHeight)
 
@@ -331,7 +364,7 @@ fun ElevationChart(
                 var boxX = indicatorX - (boxWidth / 2)
                 val boxY = (indicatorY - boxHeight - 12.dp.toPx()).coerceAtLeast(4.dp.toPx())
                 // Sicherstellen, dass die Box nicht links oder rechts aus dem Canvas herauswandert
-                boxX = boxX.coerceIn(yAxisWidth, width - boxWidth)
+                boxX = boxX.coerceIn(yAxisWidthPx, width - boxWidth)
                 // Tooltip-Hintergrundkarte zeichnen
                 drawRect(
                     color = Color.Black.copy(alpha = 0.75f),
@@ -340,8 +373,11 @@ fun ElevationChart(
                 )
 
 
-// Text in die Tooltip-Box schreiben
-                drawText(textMeasurer = textMeasurer,text = tooltipText,style = tooltipStyle,topLeft = Offset(boxX + paddingX, boxY + paddingY))
+                // Text in die Tooltip-Box schreiben
+                drawText(
+                    textLayoutResult = textLayout,
+                    topLeft = Offset(boxX + paddingX, boxY + paddingY)
+                )
             }
         }
     }

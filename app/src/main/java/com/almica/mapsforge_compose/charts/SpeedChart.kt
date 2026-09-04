@@ -11,13 +11,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -48,60 +48,65 @@ fun SpeedChart(
     onPointSelected: (DataPoint?) -> Unit = {},
     currentLatLng: LatLng? = null
 ) {
-
-    Timber.i("SpeedChart: ${dataPoints.size}")
     if (dataPoints.isEmpty()) {
-        Text(stringResource(R.string.elevation_chart_no_data), modifier = modifier.padding(16.dp))
+        Text(
+            text = stringResource(R.string.elevation_chart_no_data),
+            modifier = modifier.padding(16.dp)
+        )
         return
     }
 
-    // State für die Interaktion (ausgewählter Punkt)
+    // Interactive state (selected point)
     var selectedPoint by remember { mutableStateOf<DataPoint?>(null) }
-    // Calculate nearest DataPoint to currentLatLng and notify parent
+
+    // Sync selectedPoint with external LatLng
     LaunchedEffect(currentLatLng, dataPoints) {
         if (currentLatLng != null) {
-            val nearest = dataPoints.minByOrNull { point ->
-                MapUtils.calculateHaversineDistance(currentLatLng,
-                    LatLng(point.latitude, point.longitude))
+            selectedPoint = dataPoints.minByOrNull { point ->
+                MapUtils.calculateHaversineDistance(currentLatLng, LatLng(point.latitude, point.longitude))
             }
-            selectedPoint = nearest
-            Timber.i("selectedPoint: ${selectedPoint?.distanceKm}")
         }
     }
 
     val textMeasurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(color = labelColor, fontSize = 10.sp)
-    val tooltipStyle = TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    val labelStyle = remember(labelColor) { TextStyle(color = labelColor, fontSize = 10.sp) }
+    val tooltipStyle = remember { TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
 
-    // Daten-Extrema
-    val maxDist = dataPoints.last().distanceKm
-    val speeds = dataPoints.map { it.speedKmPerHour }
-    val maxSpeed = speeds.maxOrNull() ?: 0f
-    val minSpeed = speeds.minOrNull() ?: 0f
-    val speedRange = (maxSpeed - minSpeed).coerceAtLeast(1f)
-    val avgSpeed = 3600000 * dataPoints.last().distanceKm / (dataPoints.last().time - dataPoints.first().time)
+    // Data metrics calculations - Remembered to avoid redundant work
+    val metrics = remember(dataPoints) {
+        val lastPoint = dataPoints.last()
+        val firstPoint = dataPoints.first()
+        val maxDist = lastPoint.distanceKm
+        val speeds = dataPoints.map { it.speedKmPerHour }
+        val maxSpeed = speeds.maxOrNull() ?: 0f
+        val minSpeed = speeds.minOrNull() ?: 0f
+        val speedRange = (maxSpeed - minSpeed).coerceAtLeast(1f)
+        val timeDiff = (lastPoint.time - firstPoint.time).toDouble()
+        val avgSpeed = if (timeDiff > 0) 3600000.0 * maxDist / timeDiff else 0.0
 
-    // Intervall-Berechnungen
-    val intervalKm = when {
-        maxDist <= 5 -> 1f
-        maxDist <= 15 -> 2f
-        maxDist <= 40 -> 5f
-        maxDist <= 100 -> 10f
-        else -> 20f
+        val intervalKm = when {
+            maxDist <= 5 -> 1f
+            maxDist <= 15 -> 2f
+            maxDist <= 40 -> 5f
+            maxDist <= 100 -> 10f
+            else -> 20f
+        }
+        val intervalSpeed = when {
+            speedRange <= 10 -> 2f
+            speedRange <= 25 -> 5f
+            speedRange <= 50 -> 10f
+            speedRange <= 100 -> 20f
+            else -> 50f
+        }
+
+        ChartMetrics(maxDist, maxSpeed, minSpeed, speedRange, avgSpeed.toFloat(), intervalKm, intervalSpeed)
     }
-    val intervalSpeed = when {
-        speedRange <= 10 -> 2f
-        speedRange <= 25 -> 5f
-        speedRange <= 50 -> 10f
-        speedRange <= 100 -> 20f
-        else -> 50f
-    }
 
-    // Hilfsfunktion: Findet den Datenpunkt, der am nächsten an der berührten X-Distanz liegt (optimiert mit Binary Search)
+    // Binary search to find nearest point to touch
     fun updateSelectedPoint(touchX: Float, chartWidth: Float, yAxisWidth: Float) {
         if (chartWidth <= 0f || dataPoints.isEmpty()) return
         val relativeX = (touchX - yAxisWidth).coerceIn(0f, chartWidth)
-        val targetKm = (relativeX / chartWidth) * maxDist
+        val targetKm = (relativeX / chartWidth) * metrics.maxDist
 
         val index = dataPoints.binarySearch { it.distanceKm.compareTo(targetKm) }
         val nearestIndex = if (index >= 0) {
@@ -114,11 +119,7 @@ fun SpeedChart(
                 else -> {
                     val p1 = dataPoints[insertionPoint - 1]
                     val p2 = dataPoints[insertionPoint]
-                    if (abs(p1.distanceKm - targetKm) < abs(p2.distanceKm - targetKm)) {
-                        insertionPoint - 1
-                    } else {
-                        insertionPoint
-                    }
+                    if (abs(p1.distanceKm - targetKm) < abs(p2.distanceKm - targetKm)) insertionPoint - 1 else insertionPoint
                 }
             }
         }
@@ -131,10 +132,8 @@ fun SpeedChart(
         if (titleExtension != null) "$baseTitle $titleExtension" else baseTitle
     }
 
-    val speedFormat = stringResource(R.string.stat_format_kmh)
-
     Column(modifier = modifier.padding(16.dp)) {
-        // Obere Info-Zeile
+        // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = displayTitle,
@@ -148,13 +147,14 @@ fun SpeedChart(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Quick Stats
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(text = stringResource(R.string.speed_chart_min, minSpeed), fontSize = 14.sp, color = labelColor, fontWeight = FontWeight.Bold)
-            Text(text = stringResource(R.string.speed_chart_max, maxSpeed), fontSize = 14.sp, color = labelColor, fontWeight = FontWeight.Bold)
-            Text(text = stringResource(R.string.speed_average, avgSpeed), fontSize = 14.sp, color = labelColor, fontWeight = FontWeight.Bold)
+            StatItem(stringResource(R.string.speed_chart_min, metrics.minSpeed), labelColor)
+            StatItem(stringResource(R.string.speed_chart_max, metrics.maxSpeed), labelColor)
+            StatItem(stringResource(R.string.speed_average, metrics.avgSpeed), labelColor)
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -163,23 +163,21 @@ fun SpeedChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(Color.White)
-                // Touch- und Drag-Gesten verarbeiten (kombiniert für bessere Performance und Konsistenz)
-                .pointerInput(dataPoints) {
-                    val yAxisWidth = 45.dp.toPx()
-                    val chartWidth = size.width - yAxisWidth
+                .background(MaterialTheme.colorScheme.surface)
+                .pointerInput(dataPoints, metrics) {
+                    val yAxisWidthPx = 45.dp.toPx()
+                    val chartWidthPx = size.width - yAxisWidthPx
 
                     awaitPointerEventScope {
                         while (true) {
                             val down = awaitFirstDown()
-                            updateSelectedPoint(down.position.x, chartWidth, yAxisWidth)
+                            updateSelectedPoint(down.position.x, chartWidthPx, yAxisWidthPx)
 
                             drag(down.id) { change ->
-                                updateSelectedPoint(change.position.x, chartWidth, yAxisWidth)
+                                updateSelectedPoint(change.position.x, chartWidthPx, yAxisWidthPx)
                                 change.consume()
                             }
 
-                            // Tooltip beim Loslassen ausblenden
                             selectedPoint = null
                             onPointSelected(null)
                         }
@@ -188,22 +186,17 @@ fun SpeedChart(
         ) {
             val width = size.width
             val height = size.height
-
             val yAxisWidth = 45.dp.toPx()
             val xAxisHeight = 24.dp.toPx()
-
             val chartWidth = width - yAxisWidth
             val chartHeight = height - xAxisHeight
 
-            // ==========================================
-            // 1. Y-ACHSE & HORIZONTALE LINIEN
-            // ==========================================
-            val startSpeedLabel =
-                ceil(minSpeed / intervalSpeed) * intervalSpeed - intervalSpeed
+            // 1. Y-Axis & Grid
+            val startSpeedLabel = ceil(metrics.minSpeed / metrics.intervalSpeed) * metrics.intervalSpeed - metrics.intervalSpeed
             var currentSpeed = startSpeedLabel
-            while (currentSpeed <= maxSpeed) {
-                if (currentSpeed >= minSpeed) {
-                    val relativeSpeed = (currentSpeed - minSpeed) / speedRange
+            while (currentSpeed <= metrics.maxSpeed) {
+                if (currentSpeed >= metrics.minSpeed) {
+                    val relativeSpeed = (currentSpeed - metrics.minSpeed) / metrics.speedRange
                     val y = chartHeight - (relativeSpeed * chartHeight)
 
                     drawLine(
@@ -213,29 +206,27 @@ fun SpeedChart(
                         strokeWidth = 1.dp.toPx()
                     )
 
-                    val speedText = "%.0f".format(currentSpeed) // simplified for Y axis
+                    val speedText = "%.0f".format(currentSpeed)
                     val textLayout = textMeasurer.measure(speedText, style = labelStyle)
-                    val textY = y - (textLayout.size.height / 2)
-                    val textX = yAxisWidth - textLayout.size.width - 6.dp.toPx()
-
                     drawText(
                         textMeasurer,
                         speedText,
                         style = labelStyle,
-                        topLeft = Offset(textX.coerceAtLeast(0f), textY)
+                        topLeft = Offset(
+                            (yAxisWidth - textLayout.size.width - 6.dp.toPx()).coerceAtLeast(0f),
+                            y - (textLayout.size.height / 2)
+                        )
                     )
                 }
-                currentSpeed += intervalSpeed
+                currentSpeed += metrics.intervalSpeed
             }
 
-            // ==========================================
-            // 2. X-ACHSE & VERTIKALE LINIEN
-            // ==========================================
-            val numberOfLabels = ceil(maxDist / intervalKm).toInt()
+            // 2. X-Axis & Grid
+            val numberOfLabels = ceil(metrics.maxDist / metrics.intervalKm).toInt()
             for (i in 0..numberOfLabels) {
-                val currentKm = i * intervalKm
-                if (currentKm <= maxDist) {
-                    val x = yAxisWidth + ((currentKm / maxDist) * chartWidth)
+                val currentKm = i * metrics.intervalKm
+                if (currentKm <= metrics.maxDist) {
+                    val x = yAxisWidth + ((currentKm / metrics.maxDist) * chartWidth)
 
                     drawLine(
                         color = gridColor,
@@ -246,27 +237,25 @@ fun SpeedChart(
 
                     val labelText = "${currentKm.toInt()} km"
                     val textLayout = textMeasurer.measure(labelText, style = labelStyle)
-                    val textX = x - (textLayout.size.width / 2)
-                    val correctedX = textX.coerceIn(yAxisWidth, width - textLayout.size.width)
-
                     drawText(
                         textMeasurer,
                         labelText,
                         style = labelStyle,
-                        topLeft = Offset(correctedX, chartHeight + 6.dp.toPx())
+                        topLeft = Offset(
+                            (x - (textLayout.size.width / 2)).coerceIn(yAxisWidth, width - textLayout.size.width),
+                            chartHeight + 6.dp.toPx()
+                        )
                     )
                 }
             }
 
-            // ==========================================
-            // 3. GRAPH-PFADE (KONTUR & GRADIENT)
-            // ==========================================
+            // 3. Graph Path
             val strokePath = Path()
             val gradientPath = Path()
 
             dataPoints.forEachIndexed { index, point ->
-                val x = yAxisWidth + ((point.distanceKm / maxDist) * chartWidth)
-                val relativeSpeed = (point.speedKmPerHour - minSpeed) / speedRange
+                val x = yAxisWidth + ((point.distanceKm / metrics.maxDist) * chartWidth)
+                val relativeSpeed = (point.speedKmPerHour - metrics.minSpeed) / metrics.speedRange
                 val y = chartHeight - (relativeSpeed * chartHeight)
 
                 if (index == 0) {
@@ -279,8 +268,7 @@ fun SpeedChart(
             }
 
             if (dataPoints.isNotEmpty()) {
-                val lastX = yAxisWidth + chartWidth
-                gradientPath.lineTo(lastX, chartHeight)
+                gradientPath.lineTo(yAxisWidth + chartWidth, chartHeight)
                 gradientPath.lineTo(yAxisWidth, chartHeight)
                 gradientPath.close()
 
@@ -295,59 +283,62 @@ fun SpeedChart(
                 drawPath(path = strokePath, color = lineColor, style = Stroke(width = 1.dp.toPx()))
             }
 
-            // ==========================================
-            // 4. INTERAKTIVER INDIKATOR & TOOLTIP
-            // ==========================================
+            // 4. Indicator & Tooltip
             selectedPoint?.let { point ->
-                // Berechne X/Y-Koordinaten des gewählten Punkts auf dem Canvas
-                val indicatorX = yAxisWidth + ((point.distanceKm / maxDist) * chartWidth)
-                val relativeSpeed = (point.speedKmPerHour - minSpeed) / speedRange
+                val indicatorX = (yAxisWidth + ((point.distanceKm / metrics.maxDist) * chartWidth)).coerceIn(yAxisWidth, width)
+                val relativeSpeed = (point.speedKmPerHour - metrics.minSpeed) / metrics.speedRange
                 val indicatorY = chartHeight - (relativeSpeed * chartHeight)
 
-                // Vertikale Indikatorlinie zeichnen
                 drawLine(
                     color = indicatorColor.copy(alpha = 0.6f),
                     start = Offset(indicatorX, 0f),
-                    end = Offset(indicatorX, chartHeight), strokeWidth = 2.0.dp.toPx()
+                    end = Offset(indicatorX, chartHeight),
+                    strokeWidth = 2.dp.toPx()
                 )
-                // Kreispunkt auf der Linie zeichnen (Äußerer Ring + Kern)
-                drawCircle(
-                    color = indicatorColor.copy(alpha = 0.3f),
-                    radius = 8.dp.toPx(),
-                    center = Offset(indicatorX, indicatorY)
-                )
-                drawCircle(
-                    color = indicatorColor,
-                    radius = 4.dp.toPx(),
-                    center = Offset(indicatorX, indicatorY)
-                )
-                // Pop-up-Box (Tooltip) Text vorbereiten
-                val tooltipText =
-                    "%.1f km | %.1f km/h".format(point.distanceKm, point.speedKmPerHour)
+                drawCircle(color = indicatorColor.copy(alpha = 0.3f), radius = 8.dp.toPx(), center = Offset(indicatorX, indicatorY))
+                drawCircle(color = indicatorColor, radius = 4.dp.toPx(), center = Offset(indicatorX, indicatorY))
+
+                val tooltipText = "%.1f km | %.1f km/h".format(point.distanceKm, point.speedKmPerHour)
                 val textLayout = textMeasurer.measure(tooltipText, style = tooltipStyle)
-                val paddingX = 8.dp.toPx()
-                val paddingY = 4.dp.toPx()
-                val boxWidth = textLayout.size.width + (paddingX * 2)
-                val boxHeight = textLayout.size.height + (paddingY * 2)
-                // Tooltip-Position berechnen (leicht versetzt oberhalb des Fingers, damit er lesbar bleibt)
-                var boxX = indicatorX - (boxWidth / 2)
-                val boxY = (indicatorY - boxHeight - 12.dp.toPx()).coerceAtLeast(4.dp.toPx())
-                // Sicherstellen, dass die Box nicht links oder rechts aus dem Canvas herauswandert
-                boxX = boxX.coerceIn(yAxisWidth, width - boxWidth)
-                // Tooltip-Hintergrundkarte zeichnen
-                drawRect(
+                val px = 8.dp.toPx()
+                val py = 4.dp.toPx()
+                val boxW = textLayout.size.width + (px * 2)
+                val boxH = textLayout.size.height + (py * 2)
+                
+                val boxX = (indicatorX - (boxW / 2)).coerceIn(yAxisWidth, width - boxW)
+                val boxY = (indicatorY - boxH - 12.dp.toPx()).coerceAtLeast(4.dp.toPx())
+
+                drawRoundRect(
                     color = Color.Black.copy(alpha = 0.75f),
                     topLeft = Offset(boxX, boxY),
-                    size = Size(boxWidth, boxHeight)
+                    size = Size(boxW, boxH),
+                    cornerRadius = CornerRadius(4.dp.toPx())
                 )
-
-
-// Text in die Tooltip-Box schreiben
-                drawText(textMeasurer = textMeasurer,text = tooltipText,style = tooltipStyle,topLeft = Offset(boxX + paddingX, boxY + paddingY))
+                drawText(textMeasurer, tooltipText, style = tooltipStyle, topLeft = Offset(boxX + px, boxY + py))
             }
         }
     }
 }
+
+@Composable
+private fun StatItem(text: String, color: Color) {
+    Text(
+        text = text,
+        fontSize = 14.sp,
+        color = color,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+private data class ChartMetrics(
+    val maxDist: Float,
+    val maxSpeed: Float,
+    val minSpeed: Float,
+    val speedRange: Float,
+    val avgSpeed: Float,
+    val intervalKm: Float,
+    val intervalSpeed: Float
+)
 
 @Preview(showBackground = true)
 @Composable

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.AddLocation
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.LineAxis
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
@@ -41,11 +42,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.almica.mapsforge_compose.charts.DataPoint
 import com.almica.mapsforge_compose.charts.ElevationChart
+import com.almica.mapsforge_compose.charts.ChartViewModel
 import com.almica.mapsforge_compose.charts.GradientChart
 import com.almica.mapsforge_compose.charts.RouteEntity
 import com.almica.mapsforge_compose.charts.SpeedChart
-import com.almica.mapsforge_compose.charts.toDataPoints
 import com.almica.mapsforge_compose.charts.toKmlString
 import com.almica.mapsforge_compose.gh.GhHelper.Locomotion
 import kotlinx.coroutines.delay
@@ -65,13 +68,31 @@ fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val gpsLocation by viewModel.locationFlow.collectAsStateWithLifecycle(initialValue = null)
     val tourStats by viewModel.statsFlow.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val chartViewModel: ChartViewModel = viewModel()
+    val chartUiState by chartViewModel.uiState.collectAsStateWithLifecycle()
+
     var showGradientChart by remember { mutableStateOf(false) }
     var showElevationChart by remember { mutableStateOf(false) }
     var showActiveElevationChart by remember { mutableStateOf(false) }
     var showActiveSpeedChart by remember { mutableStateOf(false) }
-    
+    var showSearch by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val resources = LocalResources.current
+
+    LaunchedEffect(showElevationChart, uiState.loadedTrackPoints) {
+        if (showElevationChart) {
+            chartViewModel.setRouteData(uiState.loadedTrackPoints, uiState.loadedTrackName)
+        }
+    }
+
+    LaunchedEffect(showActiveElevationChart, showActiveSpeedChart, uiState.activeTrackPoints) {
+        if (showActiveElevationChart || showActiveSpeedChart) {
+            chartViewModel.setRouteData(uiState.activeTrackPoints, resources.getString(R.string.active))
+        }
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val trackingStoppedMessage = stringResource(R.string.tracking_stopped) // Ensure this exists in strings.xml
@@ -96,11 +117,17 @@ fun MainScreen(viewModel: MainViewModel) {
         loadedTrackPoints = uiState.loadedTrackPoints,
         loadedTrackName = uiState.loadedTrackName,
         activeTrackPoints = uiState.activeTrackPoints,
+        chartDataPoints = chartUiState.dataPoints,
+        chartTitleExtension = chartUiState.titleExtension,
         showGradientChart = showGradientChart,
         onDismissGradientChart = { showGradientChart = false },
         showElevationChart = showElevationChart,
         showActiveElevationChart = showActiveElevationChart,
         showActiveSpeedChart = showActiveSpeedChart,
+        showSearch = showSearch,
+        searchResults = searchResults,
+        onSearchQueryChange = { viewModel.searchAddress(it) },
+        onSearchDismiss = { showSearch = false },
         onDismissElevationChart = { showElevationChart = false },
         onDismissActiveElevationChart = { showActiveElevationChart = false },
         onDismissActiveSpeedChart = { showActiveSpeedChart = false },
@@ -117,7 +144,12 @@ fun MainScreen(viewModel: MainViewModel) {
                 onZoomChanged = viewModel::setZoomLevel,
                 onStartTracking = { viewModel.startTracking(context) },
                 onStopTracking = { viewModel.stopTracking(context) },
-                onAddPoi = viewModel::addPoi,
+                searchAddressPreset = uiState.pendingPoiAddress,
+                onDismissSearchPreset = { viewModel.setPendingPoiAddress(null) },
+                onAddPoi = { label, desc, latLong ->
+                    viewModel.setPendingPoiAddress(null)
+                    viewModel.addPoi(label, desc, latLong)
+                },
                 onDeletePoi = viewModel::deletePoi,
                 onToggleFollowGps = { viewModel.setFollowGps(!uiState.followGps) },
                 onSaveTrack = { name -> viewModel.saveCurrentTrack(name) },
@@ -141,6 +173,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     showActiveSpeedChart = true
                     Timber.i("showActiveSpeedChart = true")
                 },
+                onSearchClick = { showSearch = true },
                 onPoiClick = { poi ->
                     viewModel.setTargetPosition(LatLong(poi.latitude, poi.longitude))
                     scope.launch {
@@ -260,6 +293,11 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
             )
         },
+        onSearchFinished = { latLong, address ->
+            latLong?.let { viewModel.setTargetPosition(it) }
+            // Pre-fill the POI name state in ViewModel or UI state
+            viewModel.setPendingPoiAddress(address)
+        },
     )
 }
 
@@ -274,6 +312,7 @@ fun MainScreenContent(
     loadedTrackPoints: List<RoutePoint>,
     snackbarHostState: SnackbarHostState,
     onMove: (LatLong?) -> Unit,
+    onSearchFinished: (LatLong?, String?) -> Unit,
     mapViewContainer: @Composable () -> Unit,
     tourHistoryScreen: @Composable () -> Unit,
     settingsScreen: @Composable () -> Unit,
@@ -287,7 +326,13 @@ fun MainScreenContent(
     onDismissActiveElevationChart: () -> Unit,
     targetPosition: LatLong? = null,
     activeTrackPoints: List<RoutePoint>,
+    chartDataPoints: List<DataPoint>,
+    chartTitleExtension: String?,
     onDismissActiveSpeedChart: () -> Unit,
+    showSearch: Boolean,
+    searchResults: List<GeocoderResult>,
+    onSearchQueryChange: (String) -> Unit,
+    onSearchDismiss: () -> Unit
 ) {
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -327,8 +372,8 @@ fun MainScreenContent(
                             }
                             if (showElevationChart && loadedTrackPoints.isNotEmpty()) {
                                 ElevationChart(
-                                    dataPoints = loadedTrackPoints.toDataPoints(),
-                                    titleExtension = loadedTrackName,
+                                    dataPoints = chartDataPoints,
+                                    titleExtension = chartTitleExtension,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(200.dp),
@@ -341,8 +386,8 @@ fun MainScreenContent(
                             }
                             if (showActiveSpeedChart && activeTrackPoints.isNotEmpty()) {
                                 SpeedChart(
-                                    dataPoints = activeTrackPoints.toDataPoints(),
-                                    titleExtension = stringResource(R.string.active),
+                                    dataPoints = chartDataPoints,
+                                    titleExtension = chartTitleExtension,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(200.dp),
@@ -354,8 +399,8 @@ fun MainScreenContent(
                             }
                             if (showActiveElevationChart && activeTrackPoints.isNotEmpty()) {
                                 ElevationChart(
-                                    dataPoints = activeTrackPoints.toDataPoints(),
-                                    titleExtension = stringResource(R.string.active),
+                                    dataPoints = chartDataPoints,
+                                    titleExtension = chartTitleExtension,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(200.dp),
@@ -391,6 +436,19 @@ fun MainScreenContent(
             if (isDownloading) {
                 DownloadOverlay(downloadMessage, if (mapFileExists) 1F else downloadProgress)
             }
+
+            if (showSearch) {
+                GeocoderComponent(
+                    results = searchResults,
+                    onQueryChange = onSearchQueryChange,
+                    onResultSelected = { result ->
+                        Timber.i("Selected result: $result")
+                        onSearchFinished(result.latLong, result.displayAddress)
+                        onSearchDismiss()
+                    },
+                    onClose = onSearchDismiss
+                )
+            }
         }
     }
 }
@@ -405,6 +463,8 @@ fun MapViewContainer(
     onZoomChanged: (Int) -> Unit,
     onStartTracking: () -> Unit,
     onStopTracking: () -> Unit,
+    searchAddressPreset: String? = null,
+    onDismissSearchPreset: () -> Unit,
     onAddPoi: (String, String?, LatLong) -> Unit,
     onDeletePoi: (PoiEntity) -> Unit,
     onToggleFollowGps: () -> Unit,
@@ -415,6 +475,7 @@ fun MapViewContainer(
     onShowElevationChart: () -> Unit,
     onShowActiveElevationChart: () -> Unit,
     onShowActiveSpeedChart: () -> Unit,
+    onSearchClick: () -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -454,6 +515,8 @@ fun MapViewContainer(
                 mapCenter = uiState.targetPosition,
                 pois = uiState.pois,
                 context = context,
+                searchAddressPreset = searchAddressPreset,
+                onDismissSearchPreset = onDismissSearchPreset,
                 onStartTracking = onStartTracking,
                 onStopTracking = onStopTracking,
                 onAddPoi = { label, desc ->
@@ -468,6 +531,7 @@ fun MapViewContainer(
                 onShowElevationChart = onShowElevationChart,
                 onShowActiveElevationChart = onShowActiveElevationChart,
                 onShowActiveSpeedChart = onShowActiveSpeedChart,
+                onSearchClick = onSearchClick,
                 omRouteAppend = onRouteAppend,
                 onHistoryClick = onHistoryClick,
                 onSettingsClick = onSettingsClick,
@@ -637,6 +701,8 @@ fun MapControls(
     mapCenter: LatLong?,
     followGps: Boolean,
     pois: List<PoiEntity>,
+    searchAddressPreset: String? = null,
+    onDismissSearchPreset: () -> Unit,
     context: Context,
     onStartTracking: () -> Unit,
     onStopTracking: () -> Unit,
@@ -654,7 +720,8 @@ fun MapControls(
     onCalculateRoute: (Double, Double, Double, Double) -> Unit,
     onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit,
     onShowActiveElevationChart: () -> Unit,
-    onShowActiveSpeedChart: () -> Unit
+    onShowActiveSpeedChart: () -> Unit,
+    onSearchClick: () -> Unit
 ) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -671,10 +738,23 @@ fun MapControls(
     var showPoiListDialog by remember { mutableStateOf(false) }
     var showSaveTrackDialog by remember { mutableStateOf(false) }
 
+    // Launch POI dialog if an address was preset from search
+    LaunchedEffect(searchAddressPreset) {
+        if (searchAddressPreset != null) {
+            showAddPoiDialog = true
+        }
+    }
+
     if (showAddPoiDialog) {
-        var label by remember { mutableStateOf("") }
+        // Using a key for remember ensures the state updates if the preset changes
+        var label by remember(searchAddressPreset) {
+            mutableStateOf(searchAddressPreset ?: "")
+        }
         AlertDialog(
-            onDismissRequest = { showAddPoiDialog = false },
+            onDismissRequest = {
+                showAddPoiDialog = false
+                onDismissSearchPreset()
+            },
             title = { Text("POI hinzufügen") },
             text = {
                 TextField(
@@ -695,7 +775,10 @@ fun MapControls(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddPoiDialog = false }) {
+                TextButton(onClick = {
+                    showAddPoiDialog = false
+                    onDismissSearchPreset()
+                }) {
                     Text("Abbrechen")
                 }
             }
@@ -798,6 +881,7 @@ fun MapControls(
         onShowElevationChart = onShowElevationChart,
         onShowActiveElevationChart = onShowActiveElevationChart,
         onShowActiveSpeedChart = onShowActiveSpeedChart,
+        onSearchClick = onSearchClick,
         omRouteAppend = omRouteAppend,
     )
 }
@@ -821,7 +905,8 @@ fun MapControlsContent(
     omRouteAppend: () -> Unit,
     onShowElevationChart: () -> Unit,
     onShowActiveElevationChart: () -> Unit,
-    onShowActiveSpeedChart: () -> Unit
+    onShowActiveSpeedChart: () -> Unit,
+    onSearchClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -849,7 +934,6 @@ fun MapControlsContent(
             Button(onClick = onSettingsClick) {
                 Text(stringResource(R.string.menu_settings))
             }
-
         }
 
         // POI Dropdown Menu
@@ -883,6 +967,14 @@ fun MapControlsContent(
                         onPoiListClick()
                     },
                     leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("POI Suche") },
+                    onClick = {
+                        showPoiMenu = false
+                        onSearchClick()
+                    },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
                 )
             }
         }
@@ -1064,6 +1156,7 @@ fun MainScreenPreview() {
                         onShowElevationChart = {},
                         onShowActiveElevationChart = {},
                         onShowActiveSpeedChart = {},
+                        onSearchClick = {},
                         omRouteAppend = {}
                     )
                 }
@@ -1081,5 +1174,12 @@ fun MainScreenPreview() {
         activeTrackPoints = emptyList(),
         showActiveElevationChart = false,
         showActiveSpeedChart = false,
+        chartDataPoints = emptyList(),
+        chartTitleExtension = "",
+        showSearch = false,
+        searchResults = emptyList(),
+        onSearchQueryChange = {},
+        onSearchDismiss = {},
+        onSearchFinished = { _, _ -> }
     )
 }

@@ -3,6 +3,8 @@ package com.almica.mapsforge_compose
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.location.Geocoder
+import android.location.Address
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
@@ -14,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
+import android.os.Build
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mapsforge.core.model.LatLong
@@ -49,7 +52,8 @@ data class MainUiState(
     val roundTripFactor: Float = 0.5f,
     val downloadMessage: String? = null,
     val isAppending: Boolean = false,
-    val keepScreenOn: Boolean = false
+    val keepScreenOn: Boolean = false,
+    val pendingPoiAddress: String? = null
 )
 
 class MainViewModel(
@@ -542,7 +546,53 @@ class MainViewModel(
             }
         }
     }
+
+    private val _searchResults = MutableStateFlow<List<GeocoderResult>>(emptyList())
+    val searchResults: StateFlow<List<GeocoderResult>> = _searchResults.asStateFlow()
+
+    fun searchAddress(query: String) {
+        if (query.length < 3) {
+            _searchResults.value = emptyList()
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val geocoder = Geocoder(getApplication())
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    geocoder.getFromLocationName(query, 5, object : Geocoder.GeocodeListener {
+                        override fun onGeocode(addresses: List<Address>) {
+                            val results = addresses.map { address ->
+                                GeocoderResult(
+                                    address.getAddressLine(0) ?: "",
+                                    LatLong(address.latitude, address.longitude)
+                                )
+                            }
+                            _searchResults.value = results
+                        }
+                        override fun onError(errorMessage: String?) {
+                            Timber.e("Geocoding error: $errorMessage")
+                            _searchResults.value = emptyList()
+                        }
+                    })
+                } else {
+                    @Suppress("DEPRECATION")
+                    val addresses = geocoder.getFromLocationName(query, 5)
+                    val results = addresses?.map { address ->
+                        GeocoderResult(address.getAddressLine(0) ?: "", LatLong(address.latitude, address.longitude))
+                    } ?: emptyList()
+                    _searchResults.value = results
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Geocoding failed")
+                _searchResults.value = emptyList()
+            }
+        }
+    }
     
+    fun setPendingPoiAddress(address: String?) {
+        _uiState.update { it.copy(pendingPoiAddress = address) }
+    }
+
     fun getExternalFilesDir() = externalFilesDir
     
     fun getSettingsRepository() = settingsRepository

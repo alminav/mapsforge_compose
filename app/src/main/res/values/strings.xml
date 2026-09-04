@@ -78,4 +78,8 @@
     <string name="difference_in_elevation">Difference in elevation</string>
     <string name="active">Active</string>
     <string name="speed_average">\u2300 %1$.1f km/h</string>
+    <string name="action_search">Suche</string>
+    <string name="search_hint">Adresse suchen…</string>
+    <string name="no_results">Keine Ergebnisse gefunden</string>
+    <string name="clear_search">Suche löschen</string>
 </resources>
