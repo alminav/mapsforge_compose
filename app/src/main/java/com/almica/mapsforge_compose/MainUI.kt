@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.LineAxis
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
@@ -742,7 +743,7 @@ fun MapControls(
     var showAddPoiDialog by remember { mutableStateOf(false) }
     var showPoiListDialog by remember { mutableStateOf(false) }
     var showSaveTrackDialog by remember { mutableStateOf(false) }
-    var showWeatherScreen: PoiEntity? by remember { mutableStateOf(null) }
+    var selectedWeatherPoi by rememberSaveable { mutableStateOf<PoiEntity?>(null) }
 
     // Launch POI dialog if an address was preset from search
     LaunchedEffect(searchAddressPreset) {
@@ -815,40 +816,41 @@ fun MapControls(
                 }
             },
             onShowWeather = { poi ->
-                (currentLocation?.let { LatLong(it.latitude, it.longitude) }
-                    ?: mapCenter)?.let { start ->
-                    showWeatherScreen = poi
-                    showPoiListDialog = false
-                }
+                selectedWeatherPoi = poi
+                showPoiListDialog = false
             }
         )
     }
 
     // Render WeatherScreen last among overlays to ensure it is on top
-    if (showWeatherScreen != null) { // showWeather = false after map click
-        showWeatherScreen?.let { poi ->
-            Timber.i("Show weather for ${poi.label}")
-            AlertDialog(
-                onDismissRequest = { showWeatherScreen = null },
-                confirmButton = {
-                    TextButton(onClick = { showWeatherScreen = null }) {
-                        Text(stringResource(R.string.action_close))
-                    }
-                }, title = { Text(poi.label, style = MaterialTheme.typography.titleSmall, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                ) },
-                text = {
-                    WeatherScreen(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(420.dp)
-                            .verticalScroll(rememberScrollState()),
-                        latitude = poi.latitude,
-                        longitude = poi.longitude
-                    )
+    selectedWeatherPoi?.let { poi ->
+        Timber.i("Show weather for ${poi.label}")
+        AlertDialog(
+            onDismissRequest = { selectedWeatherPoi = null },
+            confirmButton = {
+                TextButton(onClick = { selectedWeatherPoi = null }) {
+                    Text(stringResource(R.string.action_close))
                 }
-            )
-        }
+            },
+            title = {
+                Text(
+                    poi.label,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            text = {
+                WeatherScreen(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    latitude = poi.latitude,
+                    longitude = poi.longitude
+                )
+            }
+        )
     }
     if (showSaveTrackDialog) {
         val defaultName = remember {
