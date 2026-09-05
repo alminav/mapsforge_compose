@@ -41,6 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -740,7 +742,7 @@ fun MapControls(
     var showAddPoiDialog by remember { mutableStateOf(false) }
     var showPoiListDialog by remember { mutableStateOf(false) }
     var showSaveTrackDialog by remember { mutableStateOf(false) }
-    var showWeatherScreen by remember { mutableStateOf(false) }
+    var showWeatherScreen: PoiEntity? by remember { mutableStateOf(null) }
 
     // Launch POI dialog if an address was preset from search
     LaunchedEffect(searchAddressPreset) {
@@ -812,10 +814,10 @@ fun MapControls(
                     showPoiListDialog = false
                 }
             },
-            onShowWeather = { lat, lon ->
+            onShowWeather = { poi ->
                 (currentLocation?.let { LatLong(it.latitude, it.longitude) }
                     ?: mapCenter)?.let { start ->
-                    showWeatherScreen = true
+                    showWeatherScreen = poi
                     showPoiListDialog = false
                 }
             }
@@ -823,24 +825,26 @@ fun MapControls(
     }
 
     // Render WeatherScreen last among overlays to ensure it is on top
-    if (showWeatherScreen) { // showWeather = false after map click
-        val mapLocation = mapCenter?.let { RoutePoint(it.latitude, it.longitude) }
-        mapLocation?.let { cp ->
+    if (showWeatherScreen != null) { // showWeather = false after map click
+        showWeatherScreen?.let { poi ->
+            Timber.i("Show weather for ${poi.label}")
             AlertDialog(
-                onDismissRequest = { showWeatherScreen = false },
+                onDismissRequest = { showWeatherScreen = null },
                 confirmButton = {
-                    TextButton(onClick = { showWeatherScreen = false }) {
+                    TextButton(onClick = { showWeatherScreen = null }) {
                         Text(stringResource(R.string.action_close))
                     }
-                },
+                }, title = { Text(poi.label, style = MaterialTheme.typography.titleSmall, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                ) },
                 text = {
                     WeatherScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(420.dp)
                             .verticalScroll(rememberScrollState()),
-                        latitude = cp.latitude,
-                        longitude = cp.longitude
+                        latitude = poi.latitude,
+                        longitude = poi.longitude
                     )
                 }
             )
@@ -954,7 +958,7 @@ fun MapControlsContent(
             .windowInsetsPadding(WindowInsets.navigationBars)
     ) {
         Row(modifier = Modifier
-            .padding(5.dp)
+            .padding(vertical = 5.dp)
             .align(Alignment.TopCenter)) {
             Button(onClick = {
                 if (isTrackingActive) {
@@ -965,11 +969,11 @@ fun MapControlsContent(
             }) {
                 Text(if (isTrackingActive) stringResource(R.string.tracking_stop) else stringResource(R.string.tracking_start))
             }
-            Spacer(modifier = Modifier.width(5.dp))
+            Spacer(modifier = Modifier.width(2.dp))
             Button(onClick = onHistoryClick) {
                 Text(stringResource(R.string.menu_archive))
             }
-            Spacer(modifier = Modifier.width(5.dp))
+            Spacer(modifier = Modifier.width(2.dp))
             Button(onClick = onSettingsClick) {
                 Text(stringResource(R.string.menu_settings))
             }

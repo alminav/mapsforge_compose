@@ -29,6 +29,7 @@ import java.util.Locale
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
 import com.almica.mapsforge_compose.charts.RamaniTheme
+import timber.log.Timber
 import kotlin.math.sqrt
 
 enum class PoiSortOrder { NAME, DISTANCE }
@@ -42,7 +43,7 @@ fun PoiListDialog(
     onCalculateRoute: (Double, Double) -> Unit,
     onCalculateRoundtrip: (Double, Double) -> Unit,
     mapLocation: RoutePoint?,
-    onShowWeather: (Double, Double) -> Unit
+    onShowWeather: (PoiEntity) -> Unit
 ) {
     val isPreview = LocalInspectionMode.current
     var sortOrder by remember { mutableStateOf(PoiSortOrder.NAME) }
@@ -150,7 +151,7 @@ private fun PoiListContent(
     onDeletePoi: (PoiEntity) -> Unit,
     onCalculateRoute: (Double, Double) -> Unit,
     onCalculateRoundtrip: (Double, Double) -> Unit,
-    onShowWeather: (Double, Double) -> Unit,
+    onShowWeather: (PoiEntity) -> Unit,
     isPreview: Boolean
 ) {
     Column {
@@ -227,7 +228,8 @@ private fun PoiListContent(
                                 results[0]
                             }
                         }, onShowWeather = {
-                            onShowWeather(poi.latitude, poi.longitude)
+                            Timber.i("Showing weather for ${poi.label} at ${poi.latitude}, ${poi.longitude}")
+                            onShowWeather(poi)
                         }
                     )
                 }
@@ -246,11 +248,14 @@ fun PoiListItem(
     onShowWeather: () -> Unit,
     distance: Float? = null
 ) {
-    Column(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp)
+            .padding(vertical = 4.dp, horizontal = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.onPrimary
+        ),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -260,7 +265,7 @@ fun PoiListItem(
                 imageVector = Icons.Default.Place,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 4.dp, end = 12.dp)
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp)
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -342,7 +347,7 @@ fun PoiListDialogPreview() {
             onDeletePoi = {},
             onCalculateRoute = { _, _ -> },
             onCalculateRoundtrip = { _, _ -> },
-            onShowWeather = { _, _ -> },
+            onShowWeather = { _ -> },
             mapLocation = sampleLocation,
         )
     }
