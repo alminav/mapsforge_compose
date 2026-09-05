@@ -1,47 +1,52 @@
 # Mapsforge Compose
 
-A modern Android application for outdoor tracking and map visualization, built with **Jetpack Compose** and **Mapsforge**. This project demonstrates a robust architecture for offline map rendering, GPS tracking, and tour management with a focus on battery efficiency and user customization.
+A modern Android application for outdoor tracking, routing, and map visualization, built with **Jetpack Compose** and **Mapsforge**. This project demonstrates a robust architecture for offline map rendering, GPS tracking, and tour management with a focus on battery efficiency and user customization.
 
 ## 🚀 Features
 
 - **Offline Map Rendering**: High-performance offline vector map rendering using the Mapsforge engine.
 - **GPS Tracking**: Real-time recording of outdoor activities with background execution support via a Foreground Service.
+- **Routing & Navigation**: Integrated **GraphHopper** engine for offline route calculation (Pedestrian, Bicycle, Car).
 - **Import & Export**: Support for **GPX** and **KML** formats, allowing users to import existing tracks or export their recorded tours.
+- **Weather Integration**: Real-time weather forecasts powered by **Ktor** and the Open-Meteo API.
 - **Dynamic Render Themes**: 
   - Support for multiple built-in render themes (Cruiser, Mapsforge, OutdoorActive, etc.).
   - **Custom Theme Import**: Users can import their own `.xml` render themes from external storage.
-  - **Dynamic Variable Resolution**: Intelligent path handling for theme assets using idiomatic Kotlin `resolve` for cross-platform and device-specific safety.
+- **Interactive Charts**: Detailed **Elevation and Speed profiles** for recorded and loaded tracks.
+- **POI Management**: Save and organize Points of Interest with distance calculation and navigation support.
 - **Tour History**: Persistent storage for all recorded tours using **Room Database**, including route visualization and detailed statistics.
-- **Dynamic Statistics**: Live tracking of distance, current speed, elevation gain, and altitude profile.
-- **Adaptive UI**: Built with Material 3 and Jetpack Compose for a modern, responsive user experience.
+- **Adaptive UI**: Built with Material 3 and Jetpack Compose, including full support for **Dark Mode** and **Localization** (English, German).
 
 ## 🛠️ Tech Stack
 
 - **UI**: Jetpack Compose (Material 3)
 - **Language**: Kotlin (utilizing idiomatic `resolve` for path handling and structured concurrency)
 - **Map Engine**: Mapsforge (Vector map support)
+- **Routing**: GraphHopper (Local routing engine)
 - **Architecture**: MVVM with `StateFlow` and `collectAsStateWithLifecycle`
 - **Persistence**: Room Database (SQLite)
-- **Networking**: Kotlin Coroutines & OkHttp (for map and theme downloads)
+- **Networking**: **Ktor** (for weather data) & OkHttp (for asset management)
 - **Service**: Foreground Service for reliable location tracking
+- **Charts**: Custom Compose-based charting library
 - **Logging**: Timber for structured diagnostic logging
+- **Serialization**: Kotlinx Serialization
 
 ## 📦 Project Architecture
 
-- **`MainViewModel`**: Orchestrates UI state, manages screen navigation, and handles dynamic theme loading and region switching.
-- **`TrackingService`**: A lifecycle-aware Foreground Service that handles location updates, statistics calculation, and database persistence during active tracking.
-- **`MapsforgeMapView`**: A custom Compose wrapper for the Mapsforge map view, managing layer synchronization and theme application.
-- **`SettingsRepository`**: Centralized management of user preferences using SharedPreferences, including custom theme paths.
+- **`:app`**: Main application module containing the UI and business logic.
+- **`:graphhopper`**: Routing library integration.
+- **`:composecharts`**: Modular charting component for elevation and speed profiles.
+- **`MainViewModel`**: Orchestrates UI state, manages screen navigation, and handles dynamic theme loading.
+- **`WeatherViewModel`**: Manages weather data fetching and state using Ktor.
+- **`TrackingService`**: A lifecycle-aware Foreground Service that handles location updates, statistics calculation, and database persistence.
+- **`MapsforgeMapView`**: A custom Compose wrapper for the Mapsforge map view.
 - **`TourDatabase`**: Room-based persistence layer for storing tour entities and route points.
-- **Utilities**:
-  - `GpxUtils` & `KmlUtils`: Handlers for track file serialization/deserialization.
-  - `MapDownloader` & `ThemeDownloader`: Managed download and extraction of map assets from `renderthemes.zip`.
 
 ## 🏁 Getting Started
 
 ### Prerequisites
 - Android Studio Ladybug (or newer)
-- Android SDK 24+ (Android 7.0 "Nougat")
+- Android SDK 26+ (Android 8.0 "Oreo")
 
 ### Installation
 1. Clone the repository:
@@ -55,4 +60,3 @@ A modern Android application for outdoor tracking and map visualization, built w
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
