@@ -1,55 +1,55 @@
 <resources>
     <string name="app_name">mapsforge_compose</string>
-    <string name="tour_history_title">Touren</string>
-    <string name="tour_history_empty">Noch keine Touren aufgezeichnet.</string>
-    <string name="tour_close_description">Schließen</string>
-    <string name="tour_distance">Distanz: %.2f km</string>
-    <string name="tour_elevation">Aufstieg: %.0f m</string>
-    <string name="tour_elevation_difference">Höhendifferenz: %.0f m</string>
-    <string name="tour_points">Punkte: %d</string>
+    <string name="tour_history_title">Tours</string>
+    <string name="tour_history_empty">No tours recorded yet.</string>
+    <string name="tour_close_description">Close</string>
+    <string name="tour_distance">Distance: %.2f km</string>
+    <string name="tour_elevation">Ascent: %.0f m</string>
+    <string name="tour_elevation_difference">Elevation difference: %.0f m</string>
+    <string name="tour_points">Points: %d</string>
 
-    <string name="tour_menu_import">Aus KML importieren</string>
-    <string name="tour_menu_export">Als KML exportieren</string>
+    <string name="tour_menu_import">Import from KML</string>
+    <string name="tour_menu_export">Export to KML</string>
     <string name="tour_menu_simplify">Simplify</string>
-    <string name="tour_menu_delete">Löschen</string>
-    <string name="tour_export_success">Tour erfolgreich exportiert</string>
-    <string name="tour_export_error">Fehler beim Exportieren</string>
-    <string name="tour_import_success">Tour erfolgreich importiert</string>
-    <string name="tour_import_started">Tour Import gestartet</string>
-    <string name="tour_import_error">Fehler beim Importieren</string>
+    <string name="tour_menu_delete">Delete</string>
+    <string name="tour_export_success">Tour exported successfully</string>
+    <string name="tour_export_error">Error during export</string>
+    <string name="tour_import_success">Tour imported successfully</string>
+    <string name="tour_import_started">Tour import started</string>
+    <string name="tour_import_error">Error during import</string>
 
-    <string name="stat_label_distance">Distanz</string>
-    <string name="stat_label_speed">Tempo</string>
-    <string name="stat_label_ascent">Aufstieg</string>
-    <string name="stat_label_altitude">Höhe</string>
+    <string name="stat_label_distance">Distance</string>
+    <string name="stat_label_speed">Speed</string>
+    <string name="stat_label_ascent">Ascent</string>
+    <string name="stat_label_altitude">Altitude</string>
 
     <string name="stat_format_km">%.2f km</string>
     <string name="stat_format_kmh">%.1f km/h</string>
     <string name="stat_format_meters_plus">+%.0f m</string>
     <string name="stat_format_meters">%.0f m</string>
-    <string name="tour_menu_edit_name">Name bearbeiten</string>
-    <string name="tour_name_label">Tour Name</string>
-    <string name="tour_sort_by_date">Nach Datum</string>
-    <string name="tour_sort_by_name">Nach Name</string>
-    <string name="tour_sort_by_distance">Nach Distanz</string>
-    <string name="tour_sort_by_proximity">Tour Entfernung</string>
+    <string name="tour_menu_edit_name">Edit name</string>
+    <string name="tour_name_label">Tour name</string>
+    <string name="tour_sort_by_date">By date</string>
+    <string name="tour_sort_by_name">By name</string>
+    <string name="tour_sort_by_distance">By distance</string>
+    <string name="tour_sort_by_proximity">Tour distance</string>
 
-    <string name="map_loading_progress">Karte wird geladen: %1$s…</string>
-    <string name="gh_import_progress">GraphHopper Daten werden importiert: %1$s…</string>
-    <string name="theme_import_progress">Render Theme wird importiert: %1$s…</string>
-    <string name="tracking_start">Start ⏺️</string>
-    <string name="tracking_stop">Stop ⏹️</string>
-    <string name="menu_archive">Archiv 📜</string>
-    <string name="menu_settings">Optionen ⚙️</string>
-    <string name="action_follow_gps">GPS folgen</string>
-    <string name="action_delete_track">Löschen</string>
+    <string name="map_loading_progress">Loading map: %1$s…</string>
+    <string name="gh_import_progress">Importing GraphHopper data: %1$s…</string>
+    <string name="theme_import_progress">Importing render theme: %1$s…</string>
+    <string name="tracking_start">Start ⏺</string>
+    <string name="tracking_stop">Stop ⏹</string>
+    <string name="menu_archive">Archive 📜</string>
+    <string name="menu_settings">Settings ⚙️</string>
+    <string name="action_follow_gps">Follow GPS</string>
+    <string name="action_delete_track">Delete</string>
     <string name="zoom_in">Zoom In</string>
     <string name="zoom_out">Zoom Out</string>
     <string name="tracking_stopped">Tracking stopped</string>
     <string name="gh_load_error">GH load error %1$s</string>
     <string name="gh_load_ok">GH load ok %1$s</string>
     <string name="gh_folder_not_found">GH folder not found %1$s</string>
-    <string name="setting_locomotion">setting_locomotion</string>
+    <string name="setting_locomotion">Locomotion</string>
     <string name="pedestrian">Pedestrian</string>
     <string name="bicycle_short">Bicycle (short)</string>
     <string name="bicycle_fast">Bicycle (fast)</string>
@@ -59,13 +59,13 @@
     <string name="gh_initialization">GH initialization %1$s</string>
     <string name="gh_not_initialzed">GH not initialzed</string>
     <string name="graphhopper_route_calculation">GH route calculation</string>
-    <string name="calculate">Berechnen</string>
+    <string name="calculate">Calculate</string>
     <string name="roundtrip_factor">Roundtrip Factor\n0.1 … 1.0 small to large</string>
     <string name="accept">Accept</string>
-    <string name="delete_gh_folder_title">Routing-Daten löschen</string>
-    <string name="delete_gh_folder_message">Möchten Sie den Ordner \'%1$s\' und alle enthaltenen Daten wirklich löschen?</string>
-    <string name="cancel">Abbrechen</string>
-    <string name="delete">Löschen</string>
+    <string name="delete_gh_folder_title">Delete routing data</string>
+    <string name="delete_gh_folder_message">Do you really want to delete the folder \'%1$s\' and all contained data?</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
     <string name="no_relevant_chart_data">No relevant chart data</string>
     <string name="elevation_chart_min">Min %1$d m</string>
     <string name="elevation_chart_max">Max %1$d m</string>
@@ -78,8 +78,58 @@
     <string name="difference_in_elevation">Difference in elevation</string>
     <string name="active">Active</string>
     <string name="speed_average">\u2300 %1$.1f km/h</string>
-    <string name="action_search">Suche</string>
-    <string name="search_hint">Adresse suchen…</string>
-    <string name="no_results">Keine Ergebnisse gefunden</string>
-    <string name="clear_search">Suche löschen</string>
+    <string name="action_search">Search</string>
+    <string name="search_hint">Search address…</string>
+    <string name="no_results">No results found</string>
+    <string name="clear_search">Clear search</string>
+
+    <!-- Weather -->
+    <string name="weather_clear">Clear</string>
+    <string name="weather_partly_cloudy_desc">Partly cloudy</string>
+    <string name="weather_foggy">Foggy</string>
+    <string name="weather_drizzle">Drizzle</string>
+    <string name="weather_rain">Rain</string>
+    <string name="weather_snow">Snow</string>
+    <string name="weather_rain_showers">Rain showers</string>
+    <string name="weather_snow_showers">Snow showers</string>
+    <string name="weather_thunderstorm">Thunderstorm</string>
+    <string name="weather_unknown">Unknown</string>
+
+    <string name="poi_dialog_title">Saved POIs</string>
+    <string name="poi_sort_name">Name</string>
+    <string name="poi_sort_distance">Distance</string>
+    <string name="poi_list_empty">No POIs saved.</string>
+    <string name="poi_action_navigate">POI target</string>
+    <string name="poi_action_roundtrip">POI roundtrip</string>
+    <string name="poi_action_delete">Delete POI</string>
+    <string name="poi_action_weather">Weather</string>
+    <string name="action_close">Close</string>
+    <string name="loading_weather">Loading weather data&#8230;</string>
+    <string name="unknown_error">unknown error</string>
+    <string name="weather_error_prefix">Error: %1$s</string>
+    <string name="refresh">Refresh</string>
+    <string name="current_weather">Current Weather</string>
+    <string name="humidity">Humidity</string>
+    <string name="wind">Wind</string>
+    <string name="direction">Direction</string>
+    <string name="sunrise">Sunrise</string>
+    <string name="sunset">Sunset</string>
+    <string-array name="wind_directions">
+        <item>N</item>
+        <item>NNE</item>
+        <item>NE</item>
+        <item>ENE</item>
+        <item>E</item>
+        <item>ESE</item>
+        <item>SE</item>
+        <item>SSE</item>
+        <item>S</item>
+        <item>SSW</item>
+        <item>SW</item>
+        <item>WSW</item>
+        <item>W</item>
+        <item>WNW</item>
+        <item>NW</item>
+        <item>NNW</item>
+    </string-array>
 </resources>

@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.LineAxis
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +53,7 @@ import com.almica.mapsforge_compose.charts.RouteEntity
 import com.almica.mapsforge_compose.charts.SpeedChart
 import com.almica.mapsforge_compose.charts.toKmlString
 import com.almica.mapsforge_compose.gh.GhHelper.Locomotion
+import com.almica.mapsforge_compose.weather.WeatherScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.mapsforge.core.model.LatLong
@@ -737,6 +740,7 @@ fun MapControls(
     var showAddPoiDialog by remember { mutableStateOf(false) }
     var showPoiListDialog by remember { mutableStateOf(false) }
     var showSaveTrackDialog by remember { mutableStateOf(false) }
+    var showWeatherScreen by remember { mutableStateOf(false) }
 
     // Launch POI dialog if an address was preset from search
     LaunchedEffect(searchAddressPreset) {
@@ -757,12 +761,14 @@ fun MapControls(
             },
             title = { Text("POI hinzufügen") },
             text = {
-                TextField(
-                    value = label,
-                    onValueChange = { label = it },
-                    placeholder = { Text("Name des POI") },
-                    textStyle = MaterialTheme.typography.titleLarge
-                )
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    TextField(
+                        value = label,
+                        onValueChange = { label = it },
+                        placeholder = { Text("Name des POI") },
+                        textStyle = MaterialTheme.typography.titleLarge
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -786,9 +792,9 @@ fun MapControls(
     }
 
     if (showPoiListDialog) {
-        //onCalculateRoute(52.2200, 10.4050, 52.3310, 10.4160)
         PoiListDialog(
             pois = pois,
+            mapLocation = mapCenter?.let { RoutePoint(it.latitude, it.longitude) },
             onDismiss = { showPoiListDialog = false },
             onPoiClick = onPoiClick,
             onDeletePoi = onDeletePoi,
@@ -805,10 +811,41 @@ fun MapControls(
                     onCalculateRoundtrip(start.latitude, start.longitude, lat, lon)
                     showPoiListDialog = false
                 }
+            },
+            onShowWeather = { lat, lon ->
+                (currentLocation?.let { LatLong(it.latitude, it.longitude) }
+                    ?: mapCenter)?.let { start ->
+                    showWeatherScreen = true
+                    showPoiListDialog = false
+                }
             }
         )
     }
 
+    // Render WeatherScreen last among overlays to ensure it is on top
+    if (showWeatherScreen) { // showWeather = false after map click
+        val mapLocation = mapCenter?.let { RoutePoint(it.latitude, it.longitude) }
+        mapLocation?.let { cp ->
+            AlertDialog(
+                onDismissRequest = { showWeatherScreen = false },
+                confirmButton = {
+                    TextButton(onClick = { showWeatherScreen = false }) {
+                        Text(stringResource(R.string.action_close))
+                    }
+                },
+                text = {
+                    WeatherScreen(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(420.dp)
+                            .verticalScroll(rememberScrollState()),
+                        latitude = cp.latitude,
+                        longitude = cp.longitude
+                    )
+                }
+            )
+        }
+    }
     if (showSaveTrackDialog) {
         val defaultName = remember {
             SimpleDateFormat("yyyy-MM-dd_HH:mm", Locale.getDefault()).format(Date())
@@ -818,13 +855,15 @@ fun MapControls(
             onDismissRequest = { showSaveTrackDialog = false },
             title = { Text("Route speichern") },
             text = {
-                OutlinedTextField(
-                    value = trackName,
-                    onValueChange = { trackName = it },
-                    placeholder = { Text("Name der Route") },
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge
-                )
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(
+                        value = trackName,
+                        onValueChange = { trackName = it },
+                        placeholder = { Text("Name der Route") },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyLarge
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = {

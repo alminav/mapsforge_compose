@@ -1,0 +1,48 @@
+<resources>
+    <string name="weather_clear">Sonnig</string>
+    <string name="weather_partly_cloudy_desc">Leicht bewölkt</string>
+    <string name="weather_foggy">Neblig</string>
+    <string name="weather_drizzle">Nieselregen</string>
+    <string name="weather_rain">Regen</string>
+    <string name="weather_snow">Schnee</string>
+    <string name="weather_rain_showers">Regenschauer</string>
+    <string name="weather_snow_showers">Schneeschauer</string>
+    <string name="weather_thunderstorm">Gewitter</string>
+    <string name="weather_unknown">Unbekannt</string>
+
+    <string name="poi_dialog_title">Gespeicherte POIs</string>
+    <string name="poi_sort_name">Name</string>
+    <string name="poi_sort_distance">Entfernung</string>
+    <string name="poi_list_empty">Keine POIs gespeichert.</string>
+    <string name="poi_action_navigate">POI Ziel</string>
+    <string name="poi_action_roundtrip">POI Roundtrip</string>
+    <string name="poi_action_delete">POI löschen</string>
+    <string name="poi_action_weather">Wetter</string>
+    <string name="action_close">Schließen</string>
+    <string name="loading_weather">Lade Wetter Daten&#8230;</string>
+    <string name="unknown_error">Unbekannter Fehler</string>
+    <string name="weather_error_prefix">Fehler: %1$s</string>
+    <string name="current_weather">Aktuelles Wetter</string>
+    <string name="humidity">Feuchtigkeit</string>
+    <string name="wind">Wind</string>
+    <string name="direction">Richtung</string>
+    <string name="sunset">Sonnenuntergang</string>
+    <string-array name="wind_directions">
+        <item>N</item>
+        <item>NNO</item>
+        <item>NO</item>
+        <item>ONO</item>
+        <item>O</item>
+        <item>OSO</item>
+        <item>SO</item>
+        <item>SSO</item>
+        <item>S</item>
+        <item>SSW</item>
+        <item>SW</item>
+        <item>WSW</item>
+        <item>W</item>
+        <item>WNW</item>
+        <item>NW</item>
+        <item>NNW</item>
+    </string-array>
+</resources>
