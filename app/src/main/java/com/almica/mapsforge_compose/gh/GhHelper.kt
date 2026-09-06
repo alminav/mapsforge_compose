@@ -3,6 +3,7 @@ package com.almica.mapsforge_compose.gh
 import android.app.Activity
 import android.content.Context
 import android.icu.text.SimpleDateFormat
+import android.net.Uri
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.preference.PreferenceManager
@@ -13,8 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipInputStream
 
 object GhHelper {
 
@@ -209,6 +212,41 @@ object GhHelper {
                 success = false,
                 errorMessage = e.message
             )
+        }
+    }
+
+    suspend fun unzipGhFile(context: Context, zipUri: Uri, targetFolder: File) = withContext(Dispatchers.IO) {
+        try {
+            val inputStream = context.contentResolver.openInputStream(zipUri) ?: return@withContext
+            ZipInputStream(inputStream).use { zipInput ->
+                val zipFileName = zipUri.lastPathSegment ?: "extracted"
+                val folderName = if (zipFileName.contains(".")) {
+                    zipFileName.substringBeforeLast(".")
+                } else {
+                    zipFileName
+                }
+
+                val outputDir = File(targetFolder, folderName)
+                if (!outputDir.exists()) outputDir.mkdirs()
+
+                var entry = zipInput.nextEntry
+                while (entry != null) {
+                    val entryFile = File(outputDir, entry.name)
+                    if (entry.isDirectory) {
+                        entryFile.mkdirs()
+                    } else {
+                        entryFile.parentFile?.mkdirs()
+                        FileOutputStream(entryFile).use { output ->
+                            zipInput.copyTo(output)
+                        }
+                    }
+                    zipInput.closeEntry()
+                    entry = zipInput.nextEntry
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error unzipping GH file")
+            throw e
         }
     }
 }

@@ -28,7 +28,7 @@ class MagentaCloudDownloader(private val context: Context) {
      * Lädt eine Datei im Hintergrund herunter.
      * Muss aus einem CoroutineScope aufgerufen werden (z.B. viewModelScope).
      */
-    suspend fun downloadFile(directDownloadUrl: String, fileName: String): File? {
+    suspend fun downloadFile(directDownloadUrl: String, targetFile: File): File? {
         // Wichtig: Sicherstellen, dass die URL auf /download endet
         //val directDownloadUrl = if (shareUrl.endsWith("/download")) shareUrl else "$shareUrl/download"
 
@@ -36,7 +36,7 @@ class MagentaCloudDownloader(private val context: Context) {
         return withContext(Dispatchers.IO) {
             try {
                 // Ziel-Datei im internen Speicher der App definieren
-                val targetFile = File(context.filesDir, fileName)
+                //val targetFile = File(context.filesDir, fileName)
 
                 // HTTP-Anfrage vorbereiten und streamen
                 client.prepareGet(directDownloadUrl).execute { response ->
