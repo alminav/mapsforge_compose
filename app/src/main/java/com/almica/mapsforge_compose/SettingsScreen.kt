@@ -61,10 +61,16 @@ fun SettingsScreen(
     onMapFileSelected: (String?) -> Unit = {},
     onMapFileDeleted: (String) -> Unit = {},
     onMapImported: (Uri) -> Unit = {},
+    hgtFiles: List<String> = emptyList(),
+    selectedHgtFileName: String? = null,
+    onHgtFileSelected: (String?) -> Unit = {},
+    onHgtFileDeleted: (String) -> Unit = {},
+    onHgtImported: (Uri) -> Unit = {},
     onDownloadMap: (MapRegion) -> Unit = {}
 ) {
     SettingsScreenContent(
         initialSelectedFileName = selectedMapFileName ?: repository.getSelectedRegion().fileName,
+        initialSelectedHgtFileName = selectedHgtFileName ?: repository.getSelectedHgtFileName(),
         initialSelectedThemeId = repository.getSelectedThemeId(),
         initialAltitudeCorrection = repository.getAltitudeCorrection(),
         initialRoundtripFactor = repository.getRoundTripFactor(),
@@ -76,6 +82,8 @@ fun SettingsScreen(
         selectedLocomotionKey = selectedLocomotionKey,
         mapFiles = mapFiles,
         selectedMapFileName = selectedMapFileName,
+        hgtFiles = hgtFiles,
+        selectedHgtFileName = selectedHgtFileName,
         onBack = onBack,
         onAltitudeCorrectionSaved = { repository.setAltitudeCorrection(it) },
         onFollowGpsToggled = {
@@ -101,6 +109,12 @@ fun SettingsScreen(
         },
         onMapFileDeleted = onMapFileDeleted,
         onMapImported = onMapImported,
+        onHgtFileSelected = {
+            repository.setSelectedHgtFileName(it)
+            onHgtFileSelected(it)
+        },
+        onHgtFileDeleted = onHgtFileDeleted,
+        onHgtImported = onHgtImported,
         onDownloadMap = onDownloadMap
     )
 }
@@ -109,6 +123,7 @@ fun SettingsScreen(
 @Composable
 fun SettingsScreenContent(
     initialSelectedFileName: String?,
+    initialSelectedHgtFileName: String?,
     initialSelectedThemeId: String,
     initialAltitudeCorrection: Float,
     initialFollowGps: Boolean,
@@ -119,6 +134,8 @@ fun SettingsScreenContent(
     selectedLocomotionKey: String,
     mapFiles: List<String>,
     selectedMapFileName: String?,
+    hgtFiles: List<String>,
+    selectedHgtFileName: String?,
     onBack: () -> Unit,
     onAltitudeCorrectionSaved: (Float) -> Unit,
     onFollowGpsToggled: (Boolean) -> Unit,
@@ -135,6 +152,9 @@ fun SettingsScreenContent(
     onMapFileSelected: (String?) -> Unit,
     onMapFileDeleted: (String) -> Unit,
     onMapImported: (Uri) -> Unit,
+    onHgtFileSelected: (String?) -> Unit,
+    onHgtFileDeleted: (String) -> Unit,
+    onHgtImported: (Uri) -> Unit,
     onDownloadMap: (MapRegion) -> Unit
 ) {
     BackHandler(onBack = onBack)
@@ -285,6 +305,7 @@ fun SettingsScreenContent(
     var showAltitudeDialog by remember { mutableStateOf(false) }
     var showRoundtripDialog by remember { mutableStateOf(false) }
     var showMapSelectionDialog by remember { mutableStateOf(false) }
+    var showHgtSelectionDialog by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
 
     val ghZipPickerLauncher = rememberLauncherForActivityResult(
@@ -297,6 +318,12 @@ fun SettingsScreenContent(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { onMapImported(it) }
+    }
+
+    val hgtPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { onHgtImported(it) }
     }
 
     if (showMapSelectionDialog) {
@@ -312,6 +339,22 @@ fun SettingsScreenContent(
             onImportMap = {
                 mapPickerLauncher.launch("*/*")
                 showMapSelectionDialog = false
+            }
+        )
+    }
+
+    if (showHgtSelectionDialog) {
+        HgtSelectionDialog(
+            hgtFiles = hgtFiles,
+            selectedHgtFileName = selectedHgtFileName,
+            onDismissRequest = { showHgtSelectionDialog = false },
+            onHgtSelected = {
+                onHgtFileSelected(it)
+            },
+            onHgtDeleted = onHgtFileDeleted,
+            onImportHgt = {
+                hgtPickerLauncher.launch("*/*")
+                showHgtSelectionDialog = false
             }
         )
     }
@@ -446,7 +489,11 @@ fun SettingsScreenContent(
                     onKeepScreenOnToggled = {
                         onKeepScreenOnToggled(it)
                         keepScreenOn = it
-                    }, onDownloadHgt = {
+                    },
+                    selectedHgtFileName = selectedHgtFileName,
+                    onHgtSelectionClick = { showHgtSelectionDialog = true },
+                    onHgtFileReset = { onHgtFileSelected(null) },
+                    onDownloadHgt = {
                         name, link ->
                         Timber.i("Download HGT: $name $link")
                         startHgtDownload(name, link)
@@ -500,6 +547,9 @@ fun GeneralSettingsTab(
     onFollowGpsToggled: (Boolean) -> Unit,
     keepScreenOn: Boolean,
     onKeepScreenOnToggled: (Boolean) -> Unit,
+    selectedHgtFileName: String?,
+    onHgtSelectionClick: () -> Unit,
+    onHgtFileReset: () -> Unit,
     onDownloadHgt: (String, String) -> Unit
 ) {
     val hgtDownloadMap = remember {
@@ -582,6 +632,34 @@ fun GeneralSettingsTab(
                 }
             }
         }
+
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).clickable { onHgtSelectionClick() }) {
+                        Text(text = "HGT Wahl", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = if (selectedHgtFileName != null) "Gewählt: $selectedHgtFileName" else "Keine HGT Datei gewählt",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    if (selectedHgtFileName != null) {
+                        TextButton(onClick = onHgtFileReset) {
+                            Text("Reset")
+                        }
+                    }
+                }
+            }
+        }
+
         item {
             Text(
                 text = "Verfügbare HGT-Downloads",
@@ -1127,11 +1205,101 @@ fun DownloadMapDialog(
     )
 }
 
+@Composable
+fun HgtSelectionDialog(
+    hgtFiles: List<String>,
+    selectedHgtFileName: String?,
+    onDismissRequest: () -> Unit,
+    onHgtSelected: (String) -> Unit,
+    onHgtDeleted: (String) -> Unit,
+    onImportHgt: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("HGT wählen")
+                TextButton(onClick = onImportHgt) {
+                    Text("Import")
+                }
+            }
+        },
+        text = {
+            if (hgtFiles.isEmpty()) {
+                Text("Keine HGT Dateien gefunden.")
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(hgtFiles) { fileName ->
+                        val isSelected = fileName == selectedHgtFileName
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onHgtSelected(fileName) },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = fileName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                IconButton(
+                                    onClick = { onHgtDeleted(fileName) },
+                                    modifier = Modifier.align(Alignment.CenterVertically)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Löschen"
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Schließen")
+            }
+        }
+    )
+}
+
 @Preview(showBackground = true)
 @Composable
 fun SettingsScreenPreview() {
     SettingsScreenContent(
         initialSelectedFileName = "world.map",
+        initialSelectedHgtFileName = "N52E010.hgt",
         initialSelectedThemeId = "cruiser",
         initialAltitudeCorrection = -48.0f,
         initialRoundtripFactor = 0.5f,
@@ -1150,6 +1318,8 @@ fun SettingsScreenPreview() {
         selectedLocomotionKey = "1.1",
         mapFiles = listOf("niedersachsen.map", "berlin.map", "world.map"),
         selectedMapFileName = "world.map",
+        hgtFiles = listOf("N52E010.hgt", "N53E009.hgt"),
+        selectedHgtFileName = "N52E010.hgt",
         onBack = {},
         onAltitudeCorrectionSaved = {},
         onFollowGpsToggled = {},
@@ -1165,6 +1335,9 @@ fun SettingsScreenPreview() {
         onMapFileSelected = {},
         onMapFileDeleted = {},
         onMapImported = {},
+        onHgtFileSelected = {},
+        onHgtFileDeleted = {},
+        onHgtImported = {},
         onDownloadMap = {}
     )
 }

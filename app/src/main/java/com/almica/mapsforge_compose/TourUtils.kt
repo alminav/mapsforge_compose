@@ -1,5 +1,10 @@
 package com.almica.mapsforge_compose
 
+import android.content.Context
+import androidx.preference.PreferenceManager
+import com.almica.mapsforge_compose.gh.HgtReader
+import com.google.android.gms.maps.model.LatLng
+import timber.log.Timber
 import java.util.PriorityQueue
 import kotlin.math.abs
 import kotlin.math.atan
@@ -7,6 +12,7 @@ import kotlin.math.ln
 import kotlin.math.sin
 import kotlin.math.sinh
 import kotlin.math.sqrt
+import java.io.File
 
 object TourUtils {
     data class Point(val x: Double, val y: Double, val z: Double)
@@ -128,5 +134,29 @@ object TourUtils {
 
         // Map the sorted kept indices back to their original Point objects
         return keptIndices.map { this[it] }
+    }
+    /**
+     * Refreshes the elevation data for a list of RoutePoints using SRTM (HGT) files
+     * located in the provided directory.
+     */
+    fun List<RoutePoint>.refreshElevation(context: Context): List<RoutePoint> {
+        val hgtFileName = SettingsRepository(context).getSelectedHgtFileName()
+
+        if (hgtFileName.isNullOrEmpty()) {
+            Timber.w("No HGT file name found in preferences. Returning original points.")
+            return this
+        }
+
+        val hgtRootFolder = File(context.getExternalFilesDir(null), "hgt")
+        val hgtFile = File(hgtRootFolder, hgtFileName)
+        Timber.i( "hgtFile: ${hgtFile.path}")
+        val reader = HgtReader(context, hgtFile)
+        return this.map { point ->
+            val elevation = reader.readElevation(LatLng(point.latitude, point.longitude), hgtFile)
+            Timber.i( "${point.altitude} -> $elevation")
+            point.copy(
+                altitude = elevation
+            )
+        }
     }
 }

@@ -32,14 +32,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mapsforge.core.model.LatLong
-import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Polyline
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import com.almica.mapsforge_compose.TourUtils.refreshElevation
 import com.almica.mapsforge_compose.TourUtils.simplifyToTargetCount
 import com.almica.mapsforge_compose.charts.Const
 
@@ -352,6 +352,11 @@ fun TourHistoryScreen(
                                 scope.launch {
                                     db.tourDao().updateTour(tour.copy(routePoints = simplifiedPoints))
                                 }
+                            }, onSrtmRefresh = {
+                                val refreshedPoints = tour.routePoints.refreshElevation(context)
+                                scope.launch {
+                                    db.tourDao().updateTour(tour.copy(routePoints = refreshedPoints))
+                                }
                             }
                         )
                     }
@@ -387,7 +392,8 @@ fun TourHistoryItem(
     onDelete: () -> Unit,
     onRename: (String) -> Unit,
     onExportKml: () -> Unit,
-    onSimplify: () -> Unit
+    onSimplify: () -> Unit,
+    onSrtmRefresh: () -> Unit
 ) {
     val dateString = remember(tour.timestamp) {
         SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(tour.timestamp))
@@ -457,6 +463,15 @@ fun TourHistoryItem(
                             onExportKml()
                         },
                         leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.tour_menu_srtm_refresh)) },
+                        onClick = {
+                            expanded = false
+                            onSrtmRefresh()
+                        },
+                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
                     )
                     if (tour.routePoints.size > 512) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -541,6 +556,7 @@ fun TourHistoryItemPreview() {
         onDelete = {},
         onRename = {},
         onExportKml = {},
-        onSimplify = {}
+        onSimplify = {},
+        onSrtmRefresh = {}
     )
 }

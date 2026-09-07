@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import android.os.Build
+import android.provider.OpenableColumns
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mapsforge.core.model.LatLong
@@ -46,6 +47,8 @@ data class MainUiState(
     val mapDir: File? = null,
     val mapFiles: List<String> = emptyList(),
     val selectedMapFileName: String? = null,
+    val hgtFiles: List<String> = emptyList(),
+    val selectedHgtFileName: String? = null,
     val graphHopperFolders: List<String> = emptyList(),
     val selectedGraphHopperFolder: String? = null,
     val selectedLocomotionKey: String = "1.1",
@@ -66,6 +69,7 @@ class MainViewModel(
 
     private val themeDir = externalFilesDir?.resolve("themes")
     private val mapDir = externalFilesDir?.resolve(Const.MAPFOLDER)
+    private val hgtDir = externalFilesDir?.resolve(Const.HGT_FOLDER_NAME)
     private val ghRootDir = externalFilesDir?.resolve(Const.GH_ROOT_FOLDER)
     private var saveJob: Job? = null
 
@@ -83,6 +87,8 @@ class MainViewModel(
             zoomLevel = settingsRepository.getLastZoom(),
             mapFiles = getMapFilesList(),
             selectedMapFileName = settingsRepository.getSelectedMapFileName(),
+            hgtFiles = getHgtFilesList(),
+            selectedHgtFileName = settingsRepository.getSelectedHgtFileName(),
             graphHopperFolders = getGraphHopperFoldersList(),
             selectedGraphHopperFolder = settingsRepository.getGraphHopperFolder(),
             selectedLocomotionKey = settingsRepository.getLocomotionKey(),
@@ -243,15 +249,27 @@ class MainViewModel(
         _uiState.update { it.copy(selectedMapFileName = fileName) }
     }
 
+    fun selectHgtFile(fileName: String?) {
+        settingsRepository.setSelectedHgtFileName(fileName)
+        _uiState.update { it.copy(selectedHgtFileName = fileName) }
+    }
+
     private fun getMapFilesList(): List<String> {
         return mapDir?.listFiles { file ->
             file.isFile && file.extension.equals("map", ignoreCase = true)
         }?.map { it.name }?.sorted() ?: emptyList()
     }
 
+    private fun getHgtFilesList(): List<String> {
+        return hgtDir?.listFiles { file ->
+            file.isFile && file.extension.equals("hgt", ignoreCase = true)
+        }?.map { it.name }?.sorted() ?: emptyList()
+    }
+
     fun refreshMapFiles() {
         _uiState.update { it.copy(
             mapFiles = getMapFilesList(),
+            hgtFiles = getHgtFilesList(),
             graphHopperFolders = getGraphHopperFoldersList()
         ) }
     }
@@ -306,6 +324,61 @@ class MainViewModel(
                     Timber.e(e, "Failed to import map file")
                 } finally {
                     _uiState.update { it.copy(isDownloading = false, mapFiles = getMapFilesList()) }
+                }
+            }
+        }
+    }
+
+    fun importHgtFile(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(
+                isDownloading = true,
+                downloadProgress = -1f,
+                downloadMessage = getApplication<Application>().getString(R.string.map_loading_progress, "HGT Import…")
+            ) }
+            withContext(Dispatchers.IO) {
+                try {
+                    val rootDir = hgtDir ?: return@withContext
+                    rootDir.mkdirs()
+
+                    val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst()) cursor.getString(nameIndex) else null
+                    } ?: UUID.randomUUID().toString().let { if (it.endsWith(".hgt")) it else "$it.hgt" }
+
+                    _uiState.update { it.copy(downloadMessage = getApplication<Application>().getString(R.string.map_loading_progress, fileName)) }
+
+                    if (fileName.lowercase().endsWith(".zip")) {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            ZipInputStream(input).use { zipInput ->
+                                var entry = zipInput.nextEntry
+                                while (entry != null) {
+                                    if (!entry.isDirectory && entry.name.lowercase().endsWith(".hgt")) {
+                                        val entryName = File(entry.name).name
+                                        val targetFile = File(rootDir, entryName)
+                                        FileOutputStream(targetFile).use { output ->
+                                            zipInput.copyTo(output)
+                                        }
+                                        Timber.i("Extracted HGT to ${targetFile.absolutePath}")
+                                    }
+                                    zipInput.closeEntry()
+                                    entry = zipInput.nextEntry
+                                }
+                            }
+                        }
+                    } else {
+                        val targetFile = File(rootDir, fileName)
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            FileOutputStream(targetFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        Timber.i("Imported HGT to ${targetFile.absolutePath}")
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to import HGT file")
+                } finally {
+                    _uiState.update { it.copy(isDownloading = false, hgtFiles = getHgtFilesList()) }
                 }
             }
         }

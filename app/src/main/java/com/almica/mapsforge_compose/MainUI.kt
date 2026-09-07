@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import com.almica.mapsforge_compose.gh.Const
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -284,6 +285,8 @@ fun MainScreen(viewModel: MainViewModel) {
                 onLocomotionSelected = { viewModel.selectLocomotion(it) },
                 mapFiles = uiState.mapFiles,
                 selectedMapFileName = uiState.selectedMapFileName,
+                hgtFiles = uiState.hgtFiles,
+                selectedHgtFileName = uiState.selectedHgtFileName,
                 onDownloadMap = { region ->
                     viewModel.selectMapFile(null)
                     viewModel.setRegion(region)
@@ -294,6 +297,15 @@ fun MainScreen(viewModel: MainViewModel) {
                 onMapFileDeleted = {
                     val result = uiState.mapDir?.resolve(it)?.delete()
                     Timber.i("Map file deleted: $it $result")
+                    if (result == true) {
+                        viewModel.refreshMapFiles()
+                    }
+                },
+                onHgtFileSelected = { viewModel.selectHgtFile(it) },
+                onHgtImported = { viewModel.importHgtFile(context, it) },
+                onHgtFileDeleted = {
+                    val result = uiState.externalFilesDir?.resolve(Const.HGT_FOLDER_NAME)?.resolve(it)?.delete()
+                    Timber.i("HGT file deleted: $it $result")
                     if (result == true) {
                         viewModel.refreshMapFiles()
                     }

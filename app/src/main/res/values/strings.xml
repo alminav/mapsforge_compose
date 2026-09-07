@@ -12,6 +12,7 @@
     <string name="tour_menu_export">Export to KML</string>
     <string name="tour_menu_simplify">Simplify</string>
     <string name="tour_menu_delete">Delete</string>
+    <string name="tour_menu_srtm_refresh">Refresh with SRTM data</string>
     <string name="tour_export_success">Tour exported successfully</string>
     <string name="tour_export_error">Error during export</string>
     <string name="tour_import_success">Tour imported successfully</string>

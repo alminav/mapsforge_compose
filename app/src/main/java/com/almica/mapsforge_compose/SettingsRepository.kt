@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 import com.almica.mapsforge_compose.gh.Const
+import timber.log.Timber
 
 data class MapRegion(
     val id: String,
@@ -70,6 +71,15 @@ class SettingsRepository(context: Context) {
 
     fun setSelectedMapFileName(fileName: String?) {
         sharedPreferences.edit { putString("selected_map_file_name", fileName) }
+    }
+
+    fun getSelectedHgtFileName(): String? {
+        return sharedPreferences.getString("selected_hgt_file_name", null)
+    }
+
+    fun setSelectedHgtFileName(fileName: String?) {
+        Timber.i("Set HGT file name: $fileName")
+        sharedPreferences.edit { putString("selected_hgt_file_name", fileName) }
     }
 
     fun getAltitudeCorrection(): Float {
