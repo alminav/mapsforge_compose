@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
@@ -26,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.almica.mapsforge_compose.externalData.MagentaCloud
 import com.almica.mapsforge_compose.externalData.MagentaCloudDownloader
 import com.almica.mapsforge_compose.gh.Const
 import com.almica.mapsforge_compose.gh.GhHelper
@@ -33,6 +35,8 @@ import com.almica.mapsforge_compose.gh.RoundtripValuePickerDialog
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipInputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +53,7 @@ fun SettingsScreen(
     onGhFolderSelected: (String) -> Unit = {},
     onGhFolderDeleted: (String) -> Unit = {},
     onGhZipImported: (Uri) -> Unit = {},
+    onGhFoldersRefresh: () -> Unit = {},
     selectedLocomotionKey: String = "1.1",
     onLocomotionSelected: (String) -> Unit = {},
     mapFiles: List<String> = emptyList(),
@@ -86,6 +91,7 @@ fun SettingsScreen(
         onGhFolderSelected = onGhFolderSelected,
         onGhFolderDeleted = onGhFolderDeleted,
         onGhZipImported = onGhZipImported,
+        onGhFoldersRefresh = onGhFoldersRefresh,
         onLocomotionSelected = onLocomotionSelected,
         onRoundtripFactorSaved = { repository.setRoundTripFactor(it) },
         onMapFileSelected = {
@@ -122,6 +128,7 @@ fun SettingsScreenContent(
     onGhFolderSelected: (String) -> Unit,
     onGhFolderDeleted: (String) -> Unit,
     onGhZipImported: (Uri) -> Unit,
+    onGhFoldersRefresh: () -> Unit,
     onLocomotionSelected: (String) -> Unit,
     initialRoundtripFactor: Float,
     onRoundtripFactorSaved: (Float) -> Unit,
@@ -137,15 +144,16 @@ fun SettingsScreenContent(
     var isDownloading by remember { mutableStateOf(false) }
     var downloadMessage by remember { mutableStateOf<String?>(null) }
 
-    fun startDownload() {
+    fun startGhzDownload(fileName: String, link: String) {
+        Timber.i("Start download of $fileName")
         scope.launch {
             isDownloading = true
             downloadMessage = "Starte Download..."
-            val link = "https://magentacloud.de/public.php/dav/files/axgAQy5F2fjcSCB/"
-            val ghRootDir = context.getExternalFilesDir(null)?.resolve(Const.GH_ROOT_FOLDER)
-            val fileName = "n52e0103d.ghz"
-            val targetFile = File(ghRootDir, fileName)
-            val downloadedFile = downloader.downloadFile(link, targetFile)
+            //val link = "https://magentacloud.de/public.php/dav/files/axgAQy5F2fjcSCB/"
+            //val ghRootDir = context.getExternalFilesDir(null)?.resolve(Const.GH_ROOT_FOLDER)
+            //val fileName = "n52e0103d.ghz"
+            val cacheFile = File(context.cacheDir, fileName)
+            val downloadedFile = downloader.downloadFile(link, cacheFile)
 
             if (downloadedFile != null) {
                 Timber.i("Download successful: ${downloadedFile.absolutePath}")
@@ -158,6 +166,104 @@ fun SettingsScreenContent(
                     }
                     val bCleanup = downloadedFile.delete()
                     Timber.i("Cleanup: $bCleanup ${downloadedFile.path}")
+                    onGhFoldersRefresh()
+                } catch (e: Exception) {
+                    Timber.e(e, "Unzip failed")
+                }
+            } else {
+                Timber.e("Download failed.")
+                downloadMessage = "Download fehlgeschlagen."
+            }
+            isDownloading = false
+
+        }
+    }
+
+    fun startMapDownload(fileName: String, link: String) {
+        Timber.i("Start download of $fileName")
+        scope.launch {
+            isDownloading = true
+            downloadMessage = "Starte Download..."
+            val cacheFile = File(context.cacheDir, fileName)
+            val downloadedFile = downloader.downloadFile(link, cacheFile)
+
+            if (downloadedFile != null) {
+                Timber.i("Download successful: ${downloadedFile.absolutePath}")
+                downloadMessage = "Download erfolgreich: ${downloadedFile.name}"
+
+                try {
+                    val mapRootDir = context.getExternalFilesDir(null)?.resolve(Const.MAPFOLDER)
+                    if (mapRootDir != null) {
+                        context.contentResolver.openInputStream(Uri.fromFile(downloadedFile))?.use { input ->
+                            ZipInputStream(input).use { zipInput ->
+                                var entry = zipInput.nextEntry
+                                while (entry != null) {
+                                    if (!entry.isDirectory && entry.name.lowercase().endsWith(".map")) {
+                                        val entryName = File(entry.name).name
+                                        val targetFile = File(mapRootDir, entryName)
+                                        FileOutputStream(targetFile).use { output ->
+                                            zipInput.copyTo(output)
+                                        }
+                                        Timber.i("Extracted map to ${targetFile.absolutePath}")
+                                    }
+                                    zipInput.closeEntry()
+                                    entry = zipInput.nextEntry
+                                }
+                            }
+                        }
+                    }
+                    val bCleanup = downloadedFile.delete()
+                    Timber.i("Cleanup: $bCleanup ${downloadedFile.path}")
+                    onGhFoldersRefresh() // map files refresh is included in gh folder refresh
+                } catch (e: Exception) {
+                    Timber.e(e, "Unzip failed")
+                }
+            } else {
+                Timber.e("Download failed.")
+                downloadMessage = "Download fehlgeschlagen."
+            }
+            isDownloading = false
+
+        }
+    }
+
+    fun startHgtDownload(fileName: String, link: String) {
+        Timber.i("Start download of $fileName")
+        scope.launch {
+            isDownloading = true
+            downloadMessage = "Starte Download..."
+            val cacheFile = File(context.cacheDir, fileName)
+            val downloadedFile = downloader.downloadFile(link, cacheFile)
+
+            if (downloadedFile != null) {
+                Timber.i("Download successful: ${downloadedFile.absolutePath}")
+                downloadMessage = "Download erfolgreich: ${downloadedFile.name}"
+
+                try {
+                    val hgtRootDir = context.getExternalFilesDir(null)?.resolve(Const.HGT_FOLDER_NAME)
+                    hgtRootDir?.mkdirs()
+                    if (hgtRootDir != null) {
+                        context.contentResolver.openInputStream(Uri.fromFile(downloadedFile))?.use { input ->
+                            ZipInputStream(input).use { zipInput ->
+                                var entry = zipInput.nextEntry
+                                while (entry != null) {
+                                    if (!entry.isDirectory) {
+                                        val entryName = File(entry.name).name
+                                        val targetFile = File(hgtRootDir, entryName)
+                                        FileOutputStream(targetFile).use { output ->
+                                            zipInput.copyTo(output)
+                                        }
+                                        Timber.i("Extracted map to ${targetFile.absolutePath}")
+                                    }
+                                    zipInput.closeEntry()
+                                    entry = zipInput.nextEntry
+                                }
+                            }
+                        }
+                    }
+                    val bCleanup = downloadedFile.delete()
+                    Timber.i("Cleanup: $bCleanup ${downloadedFile.path}")
+                    onGhFoldersRefresh() // map files refresh is included in gh folder refresh
                 } catch (e: Exception) {
                     Timber.e(e, "Unzip failed")
                 }
@@ -168,6 +274,7 @@ fun SettingsScreenContent(
             isDownloading = false
         }
     }
+
     var selectedThemeId by remember { mutableStateOf(initialSelectedThemeId) }
     var selectedGhFolderId by remember { mutableStateOf(selectedGhFolder) }
     var locomotionKey by remember { mutableStateOf(selectedLocomotionKey) }
@@ -339,6 +446,10 @@ fun SettingsScreenContent(
                     onKeepScreenOnToggled = {
                         onKeepScreenOnToggled(it)
                         keepScreenOn = it
+                    }, onDownloadHgt = {
+                        name, link ->
+                        Timber.i("Download HGT: $name $link")
+                        startHgtDownload(name, link)
                     }
                 )
                 1 -> MapSettingsTab(
@@ -352,6 +463,9 @@ fun SettingsScreenContent(
                         selectedThemeId = it
                         onThemeSelected(it)
                     },
+                    onDownloadMap = { name, link ->
+                        Timber.i("Download GHZ: $name $link")
+                        startMapDownload(name, link) }
                 )
                 2 -> RoutingSettingsTab(
                     roundtripFactor = roundtripFactor,
@@ -369,7 +483,9 @@ fun SettingsScreenContent(
                     },
                     onGhFolderDeleted = onGhFolderDeleted,
                     onImportGhZip = { ghZipPickerLauncher.launch("*/*") },
-                    onDownloadGhz = { startDownload() }
+                    onDownloadGhz = { name, link ->
+                        Timber.i("Download GHZ: $name $link")
+                        startGhzDownload(name, link) }
                 )
             }
         }
@@ -383,8 +499,13 @@ fun GeneralSettingsTab(
     followGps: Boolean,
     onFollowGpsToggled: (Boolean) -> Unit,
     keepScreenOn: Boolean,
-    onKeepScreenOnToggled: (Boolean) -> Unit
+    onKeepScreenOnToggled: (Boolean) -> Unit,
+    onDownloadHgt: (String, String) -> Unit
 ) {
+    val hgtDownloadMap = remember {
+        val filteredSorted = MagentaCloud.hgt.filterValues { it.isNotEmpty() }.toSortedMap()
+        mutableStateOf<Map<String, String>?>(filteredSorted)
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -461,6 +582,48 @@ fun GeneralSettingsTab(
                 }
             }
         }
+        item {
+            Text(
+                text = "Verfügbare HGT-Downloads",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp)
+                ) {
+                    val downloadMap = hgtDownloadMap.value ?: emptyMap()
+                    items(downloadMap.keys.toList()) { fileName ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onDownloadHgt(fileName, downloadMap.getValue(fileName)) }
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = fileName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download"
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -472,8 +635,13 @@ fun MapSettingsTab(
     onDownloadClick: () -> Unit,
     selectedThemeId: String,
     themeFilePath: String?,
-    onThemeSelected: (String) -> Unit
+    onThemeSelected: (String) -> Unit,
+    onDownloadMap: (String, String) -> Unit
 ) {
+    val mapsDownloadMap = remember {
+        val filteredSorted = MagentaCloud.maps.filterValues { it.isNotEmpty() }.toSortedMap()
+        mutableStateOf<Map<String, String>?>(filteredSorted)
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -558,6 +726,48 @@ fun MapSettingsTab(
                 }
             }
         }
+        item {
+            Text(
+                text = "Verfügbare Map-Downloads",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp)
+                ) {
+                    val downloadMap = mapsDownloadMap.value ?: emptyMap()
+                    items(downloadMap.keys.toList()) { fileName ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onDownloadMap(fileName, downloadMap.getValue(fileName)) }
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = fileName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download"
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -572,8 +782,13 @@ fun RoutingSettingsTab(
     onGhFolderSelected: (String) -> Unit,
     onGhFolderDeleted: (String) -> Unit,
     onImportGhZip: () -> Unit,
-    onDownloadGhz: () -> Unit
+    onDownloadGhz: (String, String) -> Unit
 ) {
+// In RoutingSettingsTab
+    val ghDownloadMap = remember {
+        val filteredSorted = MagentaCloud.gh.filterValues { it.isNotEmpty() }.toSortedMap()
+        mutableStateOf<Map<String, String>?>(filteredSorted)
+    }
     var folderToDelete by remember { mutableStateOf<String?>(null) }
 
     if (folderToDelete != null) {
@@ -664,7 +879,7 @@ fun RoutingSettingsTab(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(8.dp)) }
+        //item { Spacer(modifier = Modifier.height(8.dp)) }
 
         item {
             Row(
@@ -677,7 +892,7 @@ fun RoutingSettingsTab(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
-                TextButton(onClick = onDownloadGhz) {//onImportGhZip) {
+                TextButton(onClick = onImportGhZip) {
                     Text("Import GHZ")
                 }
             }
@@ -692,37 +907,91 @@ fun RoutingSettingsTab(
                 )
             }
         } else {
-            items(ghFolders) { folder ->
-                val selected = selectedGhFolderId == folder
+            item {
                 Card(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp)
+                    ) {
+                        items(ghFolders) { folder ->
+                            val selected = selectedGhFolderId == folder
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onGhFolderSelected(folder) }
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = folder,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f),
+                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (selected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    IconButton(onClick = { folderToDelete = folder }) {
+                                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Löschen")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(16.dp)) }
+
+        item {
+            Text(
+                text = "Verfügbare Routing-Downloads",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onGhFolderSelected(folder) },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (selected)
-                            MaterialTheme.colorScheme.primaryContainer
-                        else
-                            MaterialTheme.colorScheme.surfaceVariant
-                    )
+                        .heightIn(max = 300.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(text = folder, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (selected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            IconButton(onClick = { folderToDelete = folder }) {
-                                Icon(imageVector = Icons.Default.Delete, contentDescription = "Löschen")
-                            }
+                    val downloadMap = ghDownloadMap.value ?: emptyMap()
+                    items(downloadMap.keys.toList()) { fileName ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onDownloadGhz(fileName, downloadMap.getValue(fileName)) }
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = fileName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download"
+                              )
                         }
                     }
                 }
@@ -890,6 +1159,7 @@ fun SettingsScreenPreview() {
         onGhFolderSelected = {},
         onGhFolderDeleted = {},
         onGhZipImported = {},
+        onGhFoldersRefresh = {},
         onLocomotionSelected = {},
         onRoundtripFactorSaved = {},
         onMapFileSelected = {},

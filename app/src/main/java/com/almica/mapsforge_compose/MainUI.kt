@@ -279,6 +279,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 onGhFolderSelected = { viewModel.selectGraphHopperFolder(it) },
                 onGhFolderDeleted = { viewModel.deleteGraphHopperFolder(it) },
                 onGhZipImported = { viewModel.importGraphHopperZip(context, it) },
+                onGhFoldersRefresh = { viewModel.refreshMapFiles() },
                 selectedLocomotionKey = uiState.selectedLocomotionKey,
                 onLocomotionSelected = { viewModel.selectLocomotion(it) },
                 mapFiles = uiState.mapFiles,
