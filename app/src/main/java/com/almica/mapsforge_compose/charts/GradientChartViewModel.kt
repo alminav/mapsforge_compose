@@ -3,6 +3,7 @@ package com.almica.mapsforge_compose.charts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.almica.mapsforge_compose.TrackingService
+import com.almica.mapsforge_compose.TourEntity
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.SphericalUtil
 import kotlinx.coroutines.Dispatchers
@@ -76,31 +77,44 @@ class GradientChartViewModel : ViewModel() {
             val lllh = route.kmlString.kmlString2Lllh()
             val routeDistance = lllh.getDistanceFromLllh()
             
-            Timber.i("${route.name} lllh.size:${lllh.size}")
+            loadData(route.name, lllh, routeDistance)
+        }
+    }
+
+    fun loadTour(tour: TourEntity) {
+        viewModelScope.launch(Dispatchers.Default) {
+            val lllh = tour.routePoints.map { LatLngH(it.latitude, it.longitude, it.altitude, it.time) }
+            val routeDistance = tour.totalDistanceKm * 1000.0
             
-            val stepCount = (0.001 * routeDistance).toInt().coerceAtMost(42)
-            val simplifiedPoints = if (lllh.isNotEmpty()) {
-                lllh.simplifyToTargetCount(stepCount)
-            } else {
-                emptyList()
-            }
-            
-            val cumulativeDistances = calculateCumulativeDistances(simplifiedPoints)
-            val barChartDataModel = GradientChartDataModel(simplifiedPoints, -1, routeDistance)
-            
-            _uiState.update { 
-                GradientChartUiState.Success(
-                    name = route.name,
-                    points = simplifiedPoints,
-                    distances = cumulativeDistances,
-                    dataModel = barChartDataModel,
-                    latLng = it.latLng,
-                    locationSpeed = it.locationSpeed,
-                    locationBearing = it.locationBearing,
-                    locationAltitude = it.locationAltitude,
-                    locationTime = it.locationTime
-                )
-            }
+            loadData(tour.name ?: "Tour", lllh, routeDistance)
+        }
+    }
+
+    private fun loadData(name: String, lllh: List<LatLngH>, routeDistance: Double) {
+        Timber.i("$name lllh.size:${lllh.size}")
+
+        val stepCount = (0.001 * routeDistance).toInt().coerceAtMost(42)
+        val simplifiedPoints = if (lllh.isNotEmpty()) {
+            lllh.simplifyToTargetCount(stepCount)
+        } else {
+            emptyList()
+        }
+
+        val cumulativeDistances = calculateCumulativeDistances(simplifiedPoints)
+        val barChartDataModel = GradientChartDataModel(simplifiedPoints, -1, routeDistance)
+
+        _uiState.update {
+            GradientChartUiState.Success(
+                name = name,
+                points = simplifiedPoints,
+                distances = cumulativeDistances,
+                dataModel = barChartDataModel,
+                latLng = it.latLng,
+                locationSpeed = it.locationSpeed,
+                locationBearing = it.locationBearing,
+                locationAltitude = it.locationAltitude,
+                locationTime = it.locationTime
+            )
         }
     }
 

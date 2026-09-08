@@ -19,7 +19,7 @@ interface PoiDao {
     suspend fun deletePoiById(id: Long): Int
 }
 
-@Database(entities = [PoiEntity::class], version = 1, exportSchema = false)
+@Database(entities = [PoiEntity::class], version = 2, exportSchema = false)
 abstract class PoiDatabase : RoomDatabase() {
     abstract fun poiDao(): PoiDao
 

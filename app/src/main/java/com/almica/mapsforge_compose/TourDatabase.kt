@@ -34,8 +34,7 @@ abstract class TourDatabase : RoomDatabase() {
                     context.applicationContext,
                     TourDatabase::class.java,
                     "tour_database"
-                )
-                .fallbackToDestructiveMigration()
+                ).fallbackToDestructiveMigration(false)
                 .build()
                 INSTANCE = instance
                 instance

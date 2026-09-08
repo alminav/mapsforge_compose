@@ -13,6 +13,7 @@ data class PoiEntity(
     val description: String? = null,
     val latitude: Double,
     val longitude: Double,
+    val altitude: Double? = null,
     val type: String? = null, // e.g., "favorite", "peak", "refuge"
     val timestamp: Long = System.currentTimeMillis()
 ) : Parcelable

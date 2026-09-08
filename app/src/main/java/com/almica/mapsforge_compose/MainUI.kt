@@ -539,7 +539,9 @@ fun MapViewContainer(
                 onStartTracking = onStartTracking,
                 onStopTracking = onStopTracking,
                 onAddPoi = { label, desc ->
-                    uiState.targetPosition?.let { onAddPoi(label, desc, it) }
+                    uiState.targetPosition?.let {
+                        onAddPoi(label, desc, it)
+                    }
                 },
                 onDeletePoi = onDeletePoi,
                 onPoiClick = onPoiClick,
@@ -580,7 +582,7 @@ fun MapViewContainerContent(
 ) {
     val mapViewReference = remember { mutableStateOf<MapView?>(null) }
     var isMoving by remember { mutableStateOf(false) }
-    Timber.i("mapFile: ${mapFile?.path}")
+    //Timber.i("mapFile: ${mapFile?.path}")
     // Detect movement to show crosshair when not following GPS
     LaunchedEffect(targetPosition) {
         if (!followGps && targetPosition != null) {

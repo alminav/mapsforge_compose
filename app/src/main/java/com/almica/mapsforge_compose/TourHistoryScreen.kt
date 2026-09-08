@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import android.hardware.SensorManager
@@ -36,17 +37,22 @@ import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Polyline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Timeline
 import com.almica.mapsforge_compose.TourUtils.refreshElevation
 import com.almica.mapsforge_compose.TourUtils.simplifyToTargetCount
 import com.almica.mapsforge_compose.charts.Const
+import com.almica.mapsforge_compose.charts.ElevationChart
+import com.almica.mapsforge_compose.charts.GradientChart
 
 enum class TourSortOption {
     DATE_DESC, NAME_ASC, DISTANCE_DESC, DISTANCE_ASC, PROXIMITY_ASC
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TourHistoryScreen(
     db: TourDatabase,
@@ -91,6 +97,9 @@ fun TourHistoryScreen(
     var tourToExport by remember { mutableStateOf<TourEntity?>(null) }
     var isImporting by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var selectedTourForGradient by rememberSaveable { mutableStateOf<TourEntity?>(null) }
+    var selectedTourForElevation by rememberSaveable { mutableStateOf<TourEntity?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/vnd.google-earth.kml+xml"),
@@ -357,10 +366,47 @@ fun TourHistoryScreen(
                                 scope.launch {
                                     db.tourDao().updateTour(tour.copy(routePoints = refreshedPoints))
                                 }
+                            }, onGradientChart = {
+                                selectedTourForGradient = tour
+                            }, onElevationChart = {
+                                selectedTourForElevation = tour
                             }
                         )
                     }
                 }
+            }
+        }
+        val tourForGradient = selectedTourForGradient
+        if (tourForGradient != null) {
+            ModalBottomSheet(
+                onDismissRequest = { selectedTourForGradient = null },
+                sheetState = sheetState,
+                contentWindowInsets = { BottomSheetDefaults.windowInsets }
+            ) {
+                GradientChart(
+                    tourEntity = tourForGradient,
+                    moveMap = { },
+                    onDismiss = { selectedTourForGradient = null }
+                )
+            }
+        }
+        val tourForElevation = selectedTourForElevation
+        if (tourForElevation != null) {
+            ModalBottomSheet(
+                onDismissRequest = { selectedTourForElevation = null },
+                sheetState = sheetState,
+                contentWindowInsets = { BottomSheetDefaults.windowInsets }
+            ) {
+                ElevationChart(
+                    dataPoints = tourForElevation.routePoints.toDataPoints(),
+                    titleExtension = tourForElevation.name,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    onPointSelected = {},
+                    onClose = { selectedTourForElevation = null },
+                    currentLatLng = null
+                )
             }
         }
     }
@@ -393,7 +439,9 @@ fun TourHistoryItem(
     onRename: (String) -> Unit,
     onExportKml: () -> Unit,
     onSimplify: () -> Unit,
-    onSrtmRefresh: () -> Unit
+    onSrtmRefresh: () -> Unit,
+    onGradientChart: () -> Unit,
+    onElevationChart: () -> Unit
 ) {
     val dateString = remember(tour.timestamp) {
         SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(tour.timestamp))
@@ -463,6 +511,24 @@ fun TourHistoryItem(
                             onExportKml()
                         },
                         leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.tour_menu_gradient_chart)) },
+                        onClick = {
+                            expanded = false
+                            onGradientChart()
+                        },
+                        leadingIcon = { Icon(Icons.Default.BarChart, contentDescription = null) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.tour_menu_elevation_chart)) },
+                        onClick = {
+                            expanded = false
+                            onElevationChart()
+                        },
+                        leadingIcon = { Icon(Icons.Default.Timeline, contentDescription = null) }
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     DropdownMenuItem(
@@ -557,6 +623,8 @@ fun TourHistoryItemPreview() {
         onRename = {},
         onExportKml = {},
         onSimplify = {},
-        onSrtmRefresh = {}
+        onSrtmRefresh = {},
+        onGradientChart = {},
+        onElevationChart = {}
     )
 }

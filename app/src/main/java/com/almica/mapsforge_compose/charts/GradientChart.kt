@@ -27,6 +27,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.almica.mapsforge_compose.TourEntity
 import com.google.android.gms.maps.model.LatLng
 import timber.log.Timber
 import java.util.Locale
@@ -45,6 +46,29 @@ fun GradientChart(
         viewModel.loadRoute(routeEntity)
     }
 
+    GradientChartContent(onDismiss, moveMap, viewModel)
+}
+
+@Composable
+fun GradientChart(
+    tourEntity: TourEntity,
+    onDismiss: () -> Unit,
+    moveMap: (LatLng?) -> Unit,
+    viewModel: GradientChartViewModel = viewModel()
+) {
+    LaunchedEffect(tourEntity) {
+        viewModel.loadTour(tourEntity)
+    }
+
+    GradientChartContent(onDismiss, moveMap, viewModel)
+}
+
+@Composable
+private fun GradientChartContent(
+    onDismiss: () -> Unit,
+    moveMap: (LatLng?) -> Unit,
+    viewModel: GradientChartViewModel
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     when (val state = uiState) {

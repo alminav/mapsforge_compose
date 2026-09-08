@@ -1,6 +1,7 @@
 package com.almica.mapsforge_compose
 
 import android.location.Location
+import com.almica.mapsforge_compose.charts.DataPoint
 import org.mapsforge.core.model.LatLong
 
 data class TourStatistics(
@@ -45,6 +46,27 @@ object TrackStatsCalculator {
             elevationGainMeters = elevationGain,
             elevationDifferenceMeters = maxAlt - minAlt,
             currentAltitudeMeters = points.last().altitude
+        )
+    }
+}
+
+fun List<RoutePoint>.toDataPoints(): List<DataPoint> {
+    if (isEmpty()) return emptyList()
+    var totalDistance = 0.0
+    return mapIndexed { index, point ->
+        if (index > 0) {
+            val prev = this[index - 1]
+            totalDistance += TrackStatsCalculator.calculateDistanceKm(
+                LatLong(prev.latitude, prev.longitude),
+                LatLong(point.latitude, point.longitude)
+            )
+        }
+        DataPoint(
+            distanceKm = totalDistance.toFloat(),
+            elevationMeters = point.altitude.toFloat(),
+            latitude = point.latitude,
+            longitude = point.longitude,
+            time = point.time
         )
     }
 }

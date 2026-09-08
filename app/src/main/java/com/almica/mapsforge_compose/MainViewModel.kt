@@ -18,6 +18,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import android.os.Build
 import android.provider.OpenableColumns
+import com.almica.mapsforge_compose.gh.HgtReader
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.mapsforge.core.model.LatLong
@@ -512,16 +514,28 @@ class MainViewModel(
         Timber.i("Tracking stopped")
     }
 
-    fun addPoi(label: String, description: String?, latLong: LatLong) {
+    fun addPoi(label: String, description: String?, latLong: LatLong, altitude: Double? = null) {
         viewModelScope.launch {
+            val effectiveAltitude = altitude ?: withContext(Dispatchers.IO) {
+                getElevation(latLong)
+            }
             val poi = PoiEntity(
                 label = label,
                 description = description,
                 latitude = latLong.latitude,
-                longitude = latLong.longitude
+                longitude = latLong.longitude,
+                altitude = effectiveAltitude
             )
             poiDb.poiDao().insertPoi(poi)
         }
+    }
+
+    private fun getElevation(latLong: LatLong): Double? {
+        val hgtFileName = settingsRepository.getSelectedHgtFileName() ?: return null
+        val hgtFile = hgtDir?.resolve(hgtFileName)
+        return if (hgtFile?.exists() == true) {
+            HgtReader(getApplication(), hgtFile).getElevationFromHgt(LatLng(latLong.latitude, latLong.longitude))
+        } else null
     }
 
     fun deletePoi(poi: PoiEntity) {

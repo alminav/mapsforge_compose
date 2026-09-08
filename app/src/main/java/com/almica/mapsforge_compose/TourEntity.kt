@@ -1,15 +1,19 @@
 package com.almica.mapsforge_compose
 
+import android.os.Parcelable
 import androidx.room.*
+import kotlinx.parcelize.Parcelize
 import org.json.JSONArray
 
+@Parcelize
 data class RoutePoint(
     val latitude: Double,
     val longitude: Double,
     val altitude: Double = 0.0,
     val time: Long = 0L
-)
+) : Parcelable
 
+@Parcelize
 @Entity(tableName = "tours")
 data class TourEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -18,7 +22,7 @@ data class TourEntity(
     val totalDistanceKm: Double,
     val elevationGainMeters: Double,
     val routePoints: List<RoutePoint>
-) {
+) : Parcelable {
     fun calculateElevationDifference(): Double = calculateElevationDifference(routePoints)
 
     companion object {

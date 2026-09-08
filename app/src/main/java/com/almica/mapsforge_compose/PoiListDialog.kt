@@ -28,7 +28,10 @@ import androidx.compose.ui.unit.dp
 import java.util.Locale
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
+import com.almica.mapsforge_compose.charts.Const
 import com.almica.mapsforge_compose.charts.RamaniTheme
+import com.almica.mapsforge_compose.charts.format
+import com.almica.mapsforge_compose.charts.formatDistM
 import timber.log.Timber
 import kotlin.math.sqrt
 
@@ -281,8 +284,14 @@ fun PoiListItem(
                     null
                 }
                 val coords = String.format(Locale.US, "%.3f, %.3f", poi.latitude, poi.longitude)
+                val textAltitude = poi.altitude?.format(0)
+                val infoText = buildString {
+                    if (distText != null) append("$distText • ")
+                    append(coords)
+                    if (textAltitude != null && poi.altitude > 0) append(" ${Const.UC_ELE_ARROW} ${textAltitude}m")
+                }
                 Text(
-                    text = if (distText != null) "$distText • $coords" else coords,
+                    text = infoText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
