@@ -357,14 +357,39 @@ fun TourHistoryScreen(
                                 exportLauncher.launch(exportName)
                             },
                             onSimplify = {
-                                val simplifiedPoints = tour.routePoints.simplifyToTargetCount(512)
                                 scope.launch {
-                                    db.tourDao().updateTour(tour.copy(routePoints = simplifiedPoints))
+                                    try {
+                                        val updatedTour = withContext(Dispatchers.IO) {
+                                            val simplifiedPoints = tour.routePoints.simplifyToTargetCount(512)
+                                            val newStats = TrackStatsCalculator.calculateStats(simplifiedPoints)
+                                            tour.copy(
+                                                routePoints = simplifiedPoints,
+                                                totalDistanceKm = newStats.totalDistanceKm,
+                                                elevationGainMeters = newStats.elevationGainMeters
+                                            )
+                                        }
+                                        db.tourDao().updateTour(updatedTour)
+                                        snackbarHostState.showSnackbar("Tour simplified")
+                                    } catch (e: Exception) {
+                                        snackbarHostState.showSnackbar("Simplification failed: ${e.localizedMessage}")
+                                    }
                                 }
                             }, onSrtmRefresh = {
-                                val refreshedPoints = tour.routePoints.refreshElevation(context)
                                 scope.launch {
-                                    db.tourDao().updateTour(tour.copy(routePoints = refreshedPoints))
+                                    try {
+                                        val updatedTour = withContext(Dispatchers.IO) {
+                                            val refreshedPoints = tour.routePoints.refreshElevation(context)
+                                            val newStats = TrackStatsCalculator.calculateStats(refreshedPoints)
+                                            tour.copy(
+                                                routePoints = refreshedPoints,
+                                                elevationGainMeters = newStats.elevationGainMeters
+                                            )
+                                        }
+                                        db.tourDao().updateTour(updatedTour)
+                                        snackbarHostState.showSnackbar("Elevation data refreshed")
+                                    } catch (e: Exception) {
+                                        snackbarHostState.showSnackbar("Refresh failed: ${e.localizedMessage}")
+                                    }
                                 }
                             }, onGradientChart = {
                                 selectedTourForGradient = tour

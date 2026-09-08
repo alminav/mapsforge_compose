@@ -10,6 +10,8 @@
 
     <string name="tour_menu_import">Import from KML</string>
     <string name="tour_menu_export">Export to KML</string>
+    <string name="tour_menu_gradient_chart">Gradient chart</string>
+    <string name="tour_menu_elevation_chart">Elevation chart</string>gradient_chart">
     <string name="tour_menu_simplify">Simplify</string>
     <string name="tour_menu_delete">Delete</string>
     <string name="tour_menu_srtm_refresh">Refresh with SRTM data</string>

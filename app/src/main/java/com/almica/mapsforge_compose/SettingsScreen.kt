@@ -160,7 +160,7 @@ fun SettingsScreenContent(
     BackHandler(onBack = onBack)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val downloader = MagentaCloudDownloader(context)
+    val downloader: MagentaCloudDownloader = remember { MagentaCloudDownloader(context) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadMessage by remember { mutableStateOf<String?>(null) }
 
@@ -497,9 +497,11 @@ fun SettingsScreenContent(
                         name, link ->
                         Timber.i("Download HGT: $name $link")
                         startHgtDownload(name, link)
-                    }
+                    },
+                    hgtFiles = hgtFiles
                 )
                 1 -> MapSettingsTab(
+                    mapFiles = mapFiles,
                     selectedMapFileName = selectedMapFileName,
                     onMapSelectionClick = { showMapSelectionDialog = true },
                     onMapFileReset = { onMapFileSelected(null) },
@@ -550,12 +552,29 @@ fun GeneralSettingsTab(
     selectedHgtFileName: String?,
     onHgtSelectionClick: () -> Unit,
     onHgtFileReset: () -> Unit,
-    onDownloadHgt: (String, String) -> Unit
+    onDownloadHgt: (String, String) -> Unit,
+    hgtFiles: List<String>
 ) {
-    val hgtDownloadMap = remember {
-        val filteredSorted = MagentaCloud.hgt.filterValues { it.isNotEmpty() }.toSortedMap()
-        mutableStateOf<Map<String, String>?>(filteredSorted)
+    val context = LocalContext.current
+    val hgtItems by remember(hgtFiles) {
+        derivedStateOf {
+            val hgtRootFolder = File(context.getExternalFilesDir(null), Const.HGT_FOLDER_NAME)
+            MagentaCloud.hgt
+                .filterValues { it.isNotEmpty() }
+                .toSortedMap()
+                .map { (fileName, url) ->
+                    val realFileName = fileName.removeSuffix(Const.ZIP_EXTENSION)
+                        .replace(Const.HGT_FOLDER_NAME, "." + Const.HGT_FOLDER_NAME)
+                    val hgtFile = File(hgtRootFolder, realFileName)
+                    DownloadItem(
+                        fileName = fileName,
+                        downloadUrl = url,
+                        isDownloaded = hgtFile.exists()
+                    )
+                }
+        }
     }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -678,26 +697,11 @@ fun GeneralSettingsTab(
                         .fillMaxWidth()
                         .heightIn(max = 300.dp)
                 ) {
-                    val downloadMap = hgtDownloadMap.value ?: emptyMap()
-                    items(downloadMap.keys.toList()) { fileName ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onDownloadHgt(fileName, downloadMap.getValue(fileName)) }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = fileName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "Download"
-                            )
-                        }
+                    items(hgtItems, key = { it.fileName }) { item ->
+                        DownloadItemRow(
+                            item = item,
+                            onDownloadClick = { onDownloadHgt(item.fileName, item.downloadUrl) }
+                        )
                     }
                 }
             }
@@ -707,6 +711,7 @@ fun GeneralSettingsTab(
 
 @Composable
 fun MapSettingsTab(
+    mapFiles: List<String>,
     selectedMapFileName: String?,
     onMapSelectionClick: () -> Unit,
     onMapFileReset: () -> Unit,
@@ -716,9 +721,20 @@ fun MapSettingsTab(
     onThemeSelected: (String) -> Unit,
     onDownloadMap: (String, String) -> Unit
 ) {
-    val mapsDownloadMap = remember {
-        val filteredSorted = MagentaCloud.maps.filterValues { it.isNotEmpty() }.toSortedMap()
-        mutableStateOf<Map<String, String>?>(filteredSorted)
+    val mapsItems by remember(mapFiles) {
+        derivedStateOf {
+            MagentaCloud.maps
+                .filterValues { it.isNotEmpty() }
+                .toSortedMap()
+                .map { (fileName, url) ->
+                    val realFileName = fileName.removeSuffix(Const.ZIP_EXTENSION)
+                    DownloadItem(
+                        fileName = fileName,
+                        downloadUrl = url,
+                        isDownloaded = mapFiles.contains(realFileName)
+                    )
+                }
+        }
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -822,26 +838,11 @@ fun MapSettingsTab(
                         .fillMaxWidth()
                         .heightIn(max = 300.dp)
                 ) {
-                    val downloadMap = mapsDownloadMap.value ?: emptyMap()
-                    items(downloadMap.keys.toList()) { fileName ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onDownloadMap(fileName, downloadMap.getValue(fileName)) }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = fileName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "Download"
-                            )
-                        }
+                    items(mapsItems, key = { it.fileName }) { item ->
+                        DownloadItemRow(
+                            item = item,
+                            onDownloadClick = { onDownloadMap(item.fileName, item.downloadUrl) }
+                        )
                     }
                 }
             }
@@ -863,9 +864,20 @@ fun RoutingSettingsTab(
     onDownloadGhz: (String, String) -> Unit
 ) {
 // In RoutingSettingsTab
-    val ghDownloadMap = remember {
-        val filteredSorted = MagentaCloud.gh.filterValues { it.isNotEmpty() }.toSortedMap()
-        mutableStateOf<Map<String, String>?>(filteredSorted)
+    val ghItems by remember(ghFolders) {
+        derivedStateOf {
+            MagentaCloud.gh
+                .filterValues { it.isNotEmpty() }
+                .toSortedMap()
+                .map { (fileName, url) ->
+                    val folderName = fileName.removeSuffix(Const.GHZ_EXTENSION)
+                    DownloadItem(
+                        fileName = fileName,
+                        downloadUrl = url,
+                        isDownloaded = ghFolders.contains(folderName)
+                    )
+                }
+        }
     }
     var folderToDelete by remember { mutableStateOf<String?>(null) }
 
@@ -1051,30 +1063,43 @@ fun RoutingSettingsTab(
                         .fillMaxWidth()
                         .heightIn(max = 300.dp)
                 ) {
-                    val downloadMap = ghDownloadMap.value ?: emptyMap()
-                    items(downloadMap.keys.toList()) { fileName ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onDownloadGhz(fileName, downloadMap.getValue(fileName)) }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = fileName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "Download"
-                              )
-                        }
+                    items(ghItems, key = { it.fileName }) { item ->
+                        DownloadItemRow(
+                            item = item,
+                            onDownloadClick = { onDownloadGhz(item.fileName, item.downloadUrl) }
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun DownloadItemRow(
+    item: DownloadItem,
+    onDownloadClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(enabled = !item.isDownloaded) { onDownloadClick() }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = item.fileName,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+            color = if (item.isDownloaded) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface
+        )
+        Icon(
+            imageVector = if (item.isDownloaded) Icons.Default.Check else Icons.Default.Download,
+            contentDescription = if (item.isDownloaded) "Downloaded" else "Download",
+            tint = if (item.isDownloaded) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary
+        )
     }
 }
 
@@ -1307,11 +1332,11 @@ fun SettingsScreenPreview() {
         initialKeepScreenOn = false,
         themeFilePath = null,
         ghFolders = listOf(
-            "germany_hamburg", 
-            "germany_berlin", 
-            "germany_munich", 
-            "germany_cologne", 
-            "germany_frankfurt", 
+            "germany_hamburg",
+            "germany_berlin",
+            "germany_munich",
+            "germany_cologne",
+            "germany_frankfurt",
             "n52e0103d"
         ),
         selectedGhFolder = "n52e0103d",
@@ -1341,3 +1366,9 @@ fun SettingsScreenPreview() {
         onDownloadMap = {}
     )
 }
+
+data class DownloadItem(
+    val fileName: String,
+    val downloadUrl: String,
+    val isDownloaded: Boolean = false
+)
