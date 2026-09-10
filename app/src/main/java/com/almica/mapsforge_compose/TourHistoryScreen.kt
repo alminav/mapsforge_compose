@@ -47,6 +47,8 @@ import com.almica.mapsforge_compose.TourUtils.simplifyToTargetCount
 import com.almica.mapsforge_compose.charts.Const
 import com.almica.mapsforge_compose.charts.ElevationChart
 import com.almica.mapsforge_compose.charts.GradientChart
+import com.almica.mapsforge_compose.charts.SpeedChart
+import androidx.compose.material.icons.filled.Speed
 
 enum class TourSortOption {
     DATE_DESC, NAME_ASC, DISTANCE_DESC, DISTANCE_ASC, PROXIMITY_ASC
@@ -99,6 +101,7 @@ fun TourHistoryScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var selectedTourForGradient by rememberSaveable { mutableStateOf<TourEntity?>(null) }
     var selectedTourForElevation by rememberSaveable { mutableStateOf<TourEntity?>(null) }
+    var selectedTourForSpeed by rememberSaveable { mutableStateOf<TourEntity?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -144,6 +147,7 @@ fun TourHistoryScreen(
                             val newTour = TourEntity(
                                 name = importResult.name,
                                 timestamp = System.currentTimeMillis(),
+                                startTime = System.currentTimeMillis(),
                                 totalDistanceKm = totalDist,
                                 elevationGainMeters = 0.0,
                                 routePoints = points
@@ -187,6 +191,7 @@ fun TourHistoryScreen(
                             val newTour = TourEntity(
                                 name = importResult.name,
                                 timestamp = System.currentTimeMillis(),
+                                startTime = System.currentTimeMillis(),
                                 totalDistanceKm = totalDist,
                                 elevationGainMeters = 0.0,
                                 routePoints = points
@@ -395,6 +400,8 @@ fun TourHistoryScreen(
                                 selectedTourForGradient = tour
                             }, onElevationChart = {
                                 selectedTourForElevation = tour
+                            }, onSpeedChart = {
+                                selectedTourForSpeed = tour
                             }
                         )
                     }
@@ -434,6 +441,24 @@ fun TourHistoryScreen(
                 )
             }
         }
+        val tourForSpeed = selectedTourForSpeed
+        if (tourForSpeed != null) {
+            ModalBottomSheet(
+                onDismissRequest = { selectedTourForSpeed = null },
+                sheetState = sheetState,
+                contentWindowInsets = { BottomSheetDefaults.windowInsets }
+            ) {
+                val dataPoints = remember(tourForSpeed) { tourForSpeed.routePoints.toDataPoints(tourForSpeed.startTime) }
+                SpeedChart(
+                    dataPoints = dataPoints,
+                    titleExtension = tourForSpeed.name,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    onClose = { selectedTourForSpeed = null }
+                )
+            }
+        }
     }
 
     if (isImporting) {
@@ -466,7 +491,8 @@ fun TourHistoryItem(
     onSimplify: () -> Unit,
     onSrtmRefresh: () -> Unit,
     onGradientChart: () -> Unit,
-    onElevationChart: () -> Unit
+    onElevationChart: () -> Unit,
+    onSpeedChart: () -> Unit
 ) {
     val dateString = remember(tour.timestamp) {
         SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(tour.timestamp))
@@ -557,6 +583,15 @@ fun TourHistoryItem(
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     DropdownMenuItem(
+                        text = { Text(stringResource(R.string.tour_menu_speed_chart)) },
+                        onClick = {
+                            expanded = false
+                            onSpeedChart()
+                        },
+                        leadingIcon = { Icon(Icons.Default.Speed, contentDescription = null) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    DropdownMenuItem(
                         text = { Text(stringResource(R.string.tour_menu_srtm_refresh)) },
                         onClick = {
                             expanded = false
@@ -637,6 +672,7 @@ fun TourHistoryItemPreview() {
             id = 1,
             name = "Wanderung am Brocken",
             timestamp = 1724925600000L,
+            startTime = 1724925600000L,
             totalDistanceKm = 12.5,
             elevationGainMeters = 340.0,
             routePoints = listOf(RoutePoint(52.5200, 13.4050, 80.0),
@@ -650,6 +686,7 @@ fun TourHistoryItemPreview() {
         onSimplify = {},
         onSrtmRefresh = {},
         onGradientChart = {},
-        onElevationChart = {}
+        onElevationChart = {},
+        onSpeedChart = {}
     )
 }

@@ -57,12 +57,20 @@ fun StatisticsOverlay(
                 value = stringResource(R.string.stat_format_kmh, stats.currentSpeedKmh),
                 onClick = { onShowActiveSpeedChart() }
             )
-            if (hasPressureSensor) {
-                StatItem(
-                    label = stringResource(R.string.stat_label_ascent),
-                    value = stringResource(R.string.stat_format_meters_plus, stats.elevationGainMeters)
-                )
+
+            val formattedTime = remember(stats.totalTimeSeconds) {
+                val totalSeconds = stats.totalTimeSeconds.toLong()
+                val hours = totalSeconds / 3600
+                val minutes = (totalSeconds % 3600) / 60
+                val seconds = totalSeconds % 60
+                if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds)
+                else "%02d:%02d".format(minutes, seconds)
             }
+                StatItem(
+                    label = stringResource(R.string.stat_label_time),
+                    value = formattedTime
+                )
+
             StatItem(
                 label = stringResource(R.string.stat_label_altitude),
                 value = stringResource(R.string.stat_format_meters, stats.currentAltitudeMeters),

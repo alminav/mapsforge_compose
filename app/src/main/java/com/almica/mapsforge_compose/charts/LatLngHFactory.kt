@@ -336,7 +336,7 @@ fun List<RoutePoint>.toKmlString(name: String?): String {
     }
     return xmlwriter.toString()
 }
-fun List<RoutePoint>.toDataPoints() : List<DataPoint> {
+fun List<RoutePoint>.toDataPoints(startTime: Long = 0L) : List<DataPoint> {
     var cumulativeDistance = 0.0
     return this.mapIndexed { index, routePoint ->
         var speedKmPerHour = 0f
@@ -355,7 +355,8 @@ fun List<RoutePoint>.toDataPoints() : List<DataPoint> {
             }
         }
         DataPoint(0.001f * cumulativeDistance.toFloat(),
-            routePoint.altitude.toFloat(), routePoint.latitude, routePoint.longitude, routePoint.time).apply {
+            routePoint.altitude.toFloat(), routePoint.latitude, routePoint.longitude, 
+            if (routePoint.time == 0L) startTime else routePoint.time).apply {
             this.speedKmPerHour = speedKmPerHour
         }
     }

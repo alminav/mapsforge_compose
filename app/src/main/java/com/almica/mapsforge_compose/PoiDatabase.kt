@@ -32,9 +32,9 @@ abstract class PoiDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     PoiDatabase::class.java,
-                    "poi_database"
+                    "poi_database",
                 )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
                 INSTANCE = instance
                 instance

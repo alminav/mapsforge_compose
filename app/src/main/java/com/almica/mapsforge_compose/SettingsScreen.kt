@@ -35,8 +35,7 @@ import com.almica.mapsforge_compose.gh.RoundtripValuePickerDialog
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
-import java.io.FileOutputStream
-import java.util.zip.ZipInputStream
+import androidx.compose.ui.platform.LocalResources
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -160,138 +159,66 @@ fun SettingsScreenContent(
     BackHandler(onBack = onBack)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val downloader: MagentaCloudDownloader = remember { MagentaCloudDownloader(context) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadMessage by remember { mutableStateOf<String?>(null) }
 
-    fun startGhzDownload(fileName: String, link: String) {
+    fun startDownload(
+        fileName: String,
+        link: String,
+        onProcess: suspend (File) -> Unit
+    ) {
         Timber.i("Start download of $fileName")
         scope.launch {
-            isDownloading = true
-            downloadMessage = "Starte Download..."
-            //val link = "https://magentacloud.de/public.php/dav/files/axgAQy5F2fjcSCB/"
-            //val ghRootDir = context.getExternalFilesDir(null)?.resolve(Const.GH_ROOT_FOLDER)
-            //val fileName = "n52e0103d.ghz"
-            val cacheFile = File(context.cacheDir, fileName)
-            val downloadedFile = downloader.downloadFile(link, cacheFile)
+            try {
+                isDownloading = true
+                downloadMessage = resources.getString(R.string.download_starting)
+                val cacheFile = File(context.cacheDir, fileName)
+                val downloadedFile = downloader.downloadFile(link, cacheFile)
 
-            if (downloadedFile != null) {
-                Timber.i("Download successful: ${downloadedFile.absolutePath}")
-                downloadMessage = "Download erfolgreich: ${downloadedFile.name}"
+                if (downloadedFile != null) {
+                    Timber.i("Download successful: ${downloadedFile.absolutePath}")
+                    downloadMessage = resources.getString(R.string.download_success, downloadedFile.name)
 
-                try {
-                    val ghRootDir = context.getExternalFilesDir(null)?.resolve(Const.GH_ROOT_FOLDER)
-                    if (ghRootDir != null) {
-                        GhHelper.unzipGhFile(context, Uri.fromFile(downloadedFile), ghRootDir)
+                    try {
+                        onProcess(downloadedFile)
+                        onGhFoldersRefresh()
+                    } catch (e: Exception) {
+                        Timber.e(e, "Processing failed for $fileName")
+                        downloadMessage = resources.getString(R.string.processing_failed)
+                    } finally {
+                        val bCleanup = downloadedFile.delete()
+                        Timber.i("Cleanup: $bCleanup ${downloadedFile.path}")
                     }
-                    val bCleanup = downloadedFile.delete()
-                    Timber.i("Cleanup: $bCleanup ${downloadedFile.path}")
-                    onGhFoldersRefresh()
-                } catch (e: Exception) {
-                    Timber.e(e, "Unzip failed")
+                } else {
+                    Timber.e("Download failed.")
+                    downloadMessage = resources.getString(R.string.download_failed)
                 }
-            } else {
-                Timber.e("Download failed.")
-                downloadMessage = "Download fehlgeschlagen."
+            } finally {
+                isDownloading = false
             }
-            isDownloading = false
-
         }
     }
 
-    fun startMapDownload(fileName: String, link: String) {
-        Timber.i("Start download of $fileName")
-        scope.launch {
-            isDownloading = true
-            downloadMessage = "Starte Download..."
-            val cacheFile = File(context.cacheDir, fileName)
-            val downloadedFile = downloader.downloadFile(link, cacheFile)
-
-            if (downloadedFile != null) {
-                Timber.i("Download successful: ${downloadedFile.absolutePath}")
-                downloadMessage = "Download erfolgreich: ${downloadedFile.name}"
-
-                try {
-                    val mapRootDir = context.getExternalFilesDir(null)?.resolve(Const.MAPFOLDER)
-                    if (mapRootDir != null) {
-                        context.contentResolver.openInputStream(Uri.fromFile(downloadedFile))?.use { input ->
-                            ZipInputStream(input).use { zipInput ->
-                                var entry = zipInput.nextEntry
-                                while (entry != null) {
-                                    if (!entry.isDirectory && entry.name.lowercase().endsWith(".map")) {
-                                        val entryName = File(entry.name).name
-                                        val targetFile = File(mapRootDir, entryName)
-                                        FileOutputStream(targetFile).use { output ->
-                                            zipInput.copyTo(output)
-                                        }
-                                        Timber.i("Extracted map to ${targetFile.absolutePath}")
-                                    }
-                                    zipInput.closeEntry()
-                                    entry = zipInput.nextEntry
-                                }
-                            }
-                        }
-                    }
-                    val bCleanup = downloadedFile.delete()
-                    Timber.i("Cleanup: $bCleanup ${downloadedFile.path}")
-                    onGhFoldersRefresh() // map files refresh is included in gh folder refresh
-                } catch (e: Exception) {
-                    Timber.e(e, "Unzip failed")
-                }
-            } else {
-                Timber.e("Download failed.")
-                downloadMessage = "Download fehlgeschlagen."
-            }
-            isDownloading = false
-
+    fun startGhzDownload(fileName: String, link: String) = startDownload(fileName, link) { file ->
+        val ghRootDir = context.getExternalFilesDir(null)?.resolve(Const.GH_ROOT_FOLDER)
+        if (ghRootDir != null) {
+            GhHelper.unzipGhFile(context, Uri.fromFile(file), ghRootDir)
         }
     }
 
-    fun startHgtDownload(fileName: String, link: String) {
-        Timber.i("Start download of $fileName")
-        scope.launch {
-            isDownloading = true
-            downloadMessage = "Starte Download..."
-            val cacheFile = File(context.cacheDir, fileName)
-            val downloadedFile = downloader.downloadFile(link, cacheFile)
+    fun startMapDownload(fileName: String, link: String) = startDownload(fileName, link) { file ->
+        val mapRootDir = context.getExternalFilesDir(null)?.resolve(Const.MAPFOLDER)
+        if (mapRootDir != null) {
+            GhHelper.unzipFile(context, Uri.fromFile(file), mapRootDir, extensionFilter = ".map", flatten = true)
+        }
+    }
 
-            if (downloadedFile != null) {
-                Timber.i("Download successful: ${downloadedFile.absolutePath}")
-                downloadMessage = "Download erfolgreich: ${downloadedFile.name}"
-
-                try {
-                    val hgtRootDir = context.getExternalFilesDir(null)?.resolve(Const.HGT_FOLDER_NAME)
-                    hgtRootDir?.mkdirs()
-                    if (hgtRootDir != null) {
-                        context.contentResolver.openInputStream(Uri.fromFile(downloadedFile))?.use { input ->
-                            ZipInputStream(input).use { zipInput ->
-                                var entry = zipInput.nextEntry
-                                while (entry != null) {
-                                    if (!entry.isDirectory) {
-                                        val entryName = File(entry.name).name
-                                        val targetFile = File(hgtRootDir, entryName)
-                                        FileOutputStream(targetFile).use { output ->
-                                            zipInput.copyTo(output)
-                                        }
-                                        Timber.i("Extracted map to ${targetFile.absolutePath}")
-                                    }
-                                    zipInput.closeEntry()
-                                    entry = zipInput.nextEntry
-                                }
-                            }
-                        }
-                    }
-                    val bCleanup = downloadedFile.delete()
-                    Timber.i("Cleanup: $bCleanup ${downloadedFile.path}")
-                    onGhFoldersRefresh() // map files refresh is included in gh folder refresh
-                } catch (e: Exception) {
-                    Timber.e(e, "Unzip failed")
-                }
-            } else {
-                Timber.e("Download failed.")
-                downloadMessage = "Download fehlgeschlagen."
-            }
-            isDownloading = false
+    fun startHgtDownload(fileName: String, link: String) = startDownload(fileName, link) { file ->
+        val hgtRootDir = context.getExternalFilesDir(null)?.resolve(Const.HGT_FOLDER_NAME)
+        if (hgtRootDir != null) {
+            GhHelper.unzipFile(context, Uri.fromFile(file), hgtRootDir, flatten = true)
         }
     }
 

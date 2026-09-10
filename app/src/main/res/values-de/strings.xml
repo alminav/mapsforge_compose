@@ -26,7 +26,13 @@
     <string name="humidity">Feuchtigkeit</string>
     <string name="wind">Wind</string>
     <string name="direction">Richtung</string>
+    <string name="tour_menu_speed_chart">Geschwindigkeitsdiagramm</string>
     <string name="sunset">Sonnenuntergang</string>
+
+    <string name="download_starting">Starte Download…</string>
+    <string name="download_success">Download erfolgreich: %1$s</string>
+    <string name="download_failed">Download fehlgeschlagen.</string>
+    <string name="processing_failed">Verarbeitung fehlgeschlagen.</string>
     <string-array name="wind_directions">
         <item>N</item>
         <item>NNO</item>

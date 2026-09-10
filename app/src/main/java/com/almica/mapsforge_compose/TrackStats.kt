@@ -3,9 +3,11 @@ package com.almica.mapsforge_compose
 import android.location.Location
 import com.almica.mapsforge_compose.charts.DataPoint
 import org.mapsforge.core.model.LatLong
+import timber.log.Timber
 
 data class TourStatistics(
     val totalDistanceKm: Double = 0.0,
+    val totalTimeSeconds: Double = 0.0,
     val currentSpeedKmh: Double = 0.0,
     val elevationGainMeters: Double = 0.0,
     val elevationDifferenceMeters: Double = 0.0,
@@ -50,23 +52,32 @@ object TrackStatsCalculator {
     }
 }
 
-fun List<RoutePoint>.toDataPoints(): List<DataPoint> {
+fun List<RoutePoint>.toDataPoints(startTime: Long = 0L): List<DataPoint> {
     if (isEmpty()) return emptyList()
     var totalDistance = 0.0
     return mapIndexed { index, point ->
+        var speedKmPerHour = 0f
         if (index > 0) {
             val prev = this[index - 1]
-            totalDistance += TrackStatsCalculator.calculateDistanceKm(
+            val distanceKm = TrackStatsCalculator.calculateDistanceKm(
                 LatLong(prev.latitude, prev.longitude),
                 LatLong(point.latitude, point.longitude)
             )
+            totalDistance += distanceKm
+
+            val timeDeltaMillis = point.time - prev.time
+            if (timeDeltaMillis > 0) {
+                val speedMetersPerSecond = (distanceKm * 1000.0) / (timeDeltaMillis / 1000.0)
+                speedKmPerHour = (speedMetersPerSecond * 3.6).toFloat()
+            }
         }
         DataPoint(
             distanceKm = totalDistance.toFloat(),
             elevationMeters = point.altitude.toFloat(),
             latitude = point.latitude,
             longitude = point.longitude,
-            time = point.time
+            time = if (point.time == 0L) startTime else point.time,
+            speedKmPerHour = speedKmPerHour
         )
     }
 }

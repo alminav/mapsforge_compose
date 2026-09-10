@@ -215,40 +215,53 @@ object GhHelper {
         }
     }
 
-    suspend fun unzipGhFile(context: Context, zipUri: Uri, targetFolder: File) = withContext(Dispatchers.IO) {
+    suspend fun unzipFile(
+        context: Context,
+        zipUri: Uri,
+        targetFolder: File,
+        createSubfolder: Boolean = false,
+        extensionFilter: String? = null,
+        flatten: Boolean = false
+    ) = withContext(Dispatchers.IO) {
         try {
             val inputStream = context.contentResolver.openInputStream(zipUri) ?: return@withContext
             ZipInputStream(inputStream).use { zipInput ->
-                val zipFileName = zipUri.lastPathSegment ?: "extracted"
-                val folderName = if (zipFileName.contains(".")) {
-                    zipFileName.substringBeforeLast(".")
+                val baseDir = if (createSubfolder) {
+                    val zipFileName = zipUri.lastPathSegment ?: "extracted"
+                    val folderName = if (zipFileName.contains(".")) {
+                        zipFileName.substringBeforeLast(".")
+                    } else {
+                        zipFileName
+                    }
+                    File(targetFolder, folderName).also { it.mkdirs() }
                 } else {
-                    zipFileName
+                    targetFolder.also { it.mkdirs() }
                 }
-
-                val outputDir = File(targetFolder, folderName)
-                if (!outputDir.exists()) outputDir.mkdirs()
 
                 var entry = zipInput.nextEntry
                 while (entry != null) {
-                    val entryFile = File(outputDir, entry.name)
-                    if (entry.isDirectory) {
-                        entryFile.mkdirs()
-                    } else {
-                        entryFile.parentFile?.mkdirs()
-                        FileOutputStream(entryFile).use { output ->
+                    if (!entry.isDirectory && (extensionFilter == null || entry.name.lowercase().endsWith(extensionFilter))) {
+                        val entryName = if (flatten) File(entry.name).name else entry.name
+                        val targetFile = File(baseDir, entryName)
+                        targetFile.parentFile?.mkdirs()
+                        FileOutputStream(targetFile).use { output ->
                             zipInput.copyTo(output)
                         }
+                    } else if (entry.isDirectory && !flatten) {
+                        File(baseDir, entry.name).mkdirs()
                     }
                     zipInput.closeEntry()
                     entry = zipInput.nextEntry
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error unzipping GH file")
+            Timber.e(e, "Error unzipping file $zipUri")
             throw e
         }
     }
+
+    suspend fun unzipGhFile(context: Context, zipUri: Uri, targetFolder: File) = 
+        unzipFile(context, zipUri, targetFolder, createSubfolder = true, flatten = false)
 }
 
 data class GhRouteResult(

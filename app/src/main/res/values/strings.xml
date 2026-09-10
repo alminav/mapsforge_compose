@@ -11,7 +11,8 @@
     <string name="tour_menu_import">Import from KML</string>
     <string name="tour_menu_export">Export to KML</string>
     <string name="tour_menu_gradient_chart">Gradient chart</string>
-    <string name="tour_menu_elevation_chart">Elevation chart</string>gradient_chart">
+    <string name="tour_menu_elevation_chart">Elevation chart</string>
+    <string name="tour_menu_speed_chart">Speed chart</string>
     <string name="tour_menu_simplify">Simplify</string>
     <string name="tour_menu_delete">Delete</string>
     <string name="tour_menu_srtm_refresh">Refresh with SRTM data</string>
@@ -25,6 +26,7 @@
     <string name="stat_label_speed">Speed</string>
     <string name="stat_label_ascent">Ascent</string>
     <string name="stat_label_altitude">Altitude</string>
+    <string name="stat_label_time">Time</string>
 
     <string name="stat_format_km">%.2f km</string>
     <string name="stat_format_kmh">%.1f km/h</string>
@@ -85,6 +87,11 @@
     <string name="search_hint">Search address…</string>
     <string name="no_results">No results found</string>
     <string name="clear_search">Clear search</string>
+
+    <string name="download_starting">Starting download…</string>
+    <string name="download_success">Download successful: %1$s</string>
+    <string name="download_failed">Download failed.</string>
+    <string name="processing_failed">Processing failed.</string>
 
     <!-- Weather -->
     <string name="weather_clear">Clear</string>

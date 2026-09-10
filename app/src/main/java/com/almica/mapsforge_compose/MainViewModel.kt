@@ -438,6 +438,7 @@ class MainViewModel(
             val newTour = TourEntity(
                 name = name,
                 timestamp = System.currentTimeMillis(),
+                startTime = points.firstOrNull()?.time ?: System.currentTimeMillis(),
                 totalDistanceKm = stats.totalDistanceKm,
                 elevationGainMeters = stats.elevationGainMeters,
                 routePoints = points

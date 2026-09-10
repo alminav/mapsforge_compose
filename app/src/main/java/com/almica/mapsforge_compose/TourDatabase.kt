@@ -19,7 +19,7 @@ interface TourDao {
     suspend fun deleteTour(tour: TourEntity): Int
 }
 
-@Database(entities = [TourEntity::class], version = 2, exportSchema = false)
+@Database(entities = [TourEntity::class], version = 3, exportSchema = false)
 @TypeConverters(RoomTypeConverters::class)
 abstract class TourDatabase : RoomDatabase() {
     abstract fun tourDao(): TourDao
@@ -33,8 +33,8 @@ abstract class TourDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     TourDatabase::class.java,
-                    "tour_database"
-                ).fallbackToDestructiveMigration(false)
+                    "tour_database",
+                ).fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
                 INSTANCE = instance
                 instance

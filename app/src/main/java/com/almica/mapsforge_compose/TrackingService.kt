@@ -31,6 +31,7 @@ class TrackingService : Service(), SensorEventListener {
     private var sensorManager: SensorManager? = null
     private var pressureSensor: Sensor? = null
     private var lastAltitude: Double? = null
+    private var tourStartTime: Long = 0L
 
     companion object {
         const val CHANNEL_ID = "tracking_channel"
@@ -77,6 +78,7 @@ class TrackingService : Service(), SensorEventListener {
         }
 
         currentTrackPoints.clear()
+        tourStartTime = System.currentTimeMillis()
         _statsFlow.value = TourStatistics()
         lastAltitude = null
         startGpsTracking(intervalMs = 3000L)
@@ -100,25 +102,30 @@ class TrackingService : Service(), SensorEventListener {
     private suspend fun processNewLocation(routePoint: RoutePoint, currentAltitudeMeters: Double) {
         val currentStats = _statsFlow.value
         var addedDistance = 0.0
+        var addedTime = 0.0
 
         if (currentTrackPoints.isNotEmpty()) {
+            val lastPoint = currentTrackPoints.last()
             addedDistance = TrackStatsCalculator.calculateDistanceKm(
-                LatLong(currentTrackPoints.last().latitude, currentTrackPoints.last().longitude),
+                LatLong(lastPoint.latitude, lastPoint.longitude),
                 LatLong(routePoint.latitude, routePoint.longitude))
+            addedTime = (routePoint.time - lastPoint.time) / 1000.0
         }
 
         currentTrackPoints.add(routePoint)
+        Timber.i("addedDistance: $addedDistance, addedTime: $addedTime")
         locationFlow.emit(routePoint)
 
-        val computedSpeed = (addedDistance / (3.0 / 3600.0))
+        val computedSpeed = if (addedTime > 0) (addedDistance / (addedTime / 3600.0)) else 0.0
 
         _statsFlow.value = currentStats.copy(
             totalDistanceKm = currentStats.totalDistanceKm + addedDistance,
+            totalTimeSeconds = currentStats.totalTimeSeconds + addedTime,
             currentSpeedKmh = if (computedSpeed < 1.0) 0.0 else computedSpeed,
             //elevationDifferenceMeters = TourEntity.calculateElevationDifference(currentTrackPoints),
             currentAltitudeMeters = currentAltitudeMeters
         )
-        Timber.i("currentAltitudeMeters: $currentAltitudeMeters")
+        //Timber.i("currentAltitudeMeters: $currentAltitudeMeters")
     }
 
     private fun stopAndSaveTourToDatabase() {
@@ -126,6 +133,7 @@ class TrackingService : Service(), SensorEventListener {
         val stats = _statsFlow.value
         val newTour = TourEntity(
             timestamp = System.currentTimeMillis(),
+            startTime = tourStartTime,
             totalDistanceKm = stats.totalDistanceKm,
             elevationGainMeters = stats.elevationGainMeters,
             routePoints = currentTrackPoints.toList()

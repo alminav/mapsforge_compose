@@ -19,6 +19,7 @@ data class TourEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String? = null,
     val timestamp: Long,
+    val startTime: Long = 0L,
     val totalDistanceKm: Double,
     val elevationGainMeters: Double,
     val routePoints: List<RoutePoint>
@@ -45,6 +46,7 @@ class RoomTypeConverters {
                 put(pt.latitude)
                 put(pt.longitude)
                 put(pt.altitude)
+                put(pt.time)
             }
             jsonArray.put(pointArray)
         }
@@ -59,9 +61,10 @@ class RoomTypeConverters {
             val pointArray = jsonArray.getJSONArray(i)
             list.add(
                 RoutePoint(
-                    pointArray.getDouble(0),
-                    pointArray.getDouble(1),
-                    pointArray.getDouble(2)
+                    latitude = pointArray.getDouble(0),
+                    longitude = pointArray.getDouble(1),
+                    altitude = pointArray.getDouble(2),
+                    time = pointArray.optLong(3, 0L)
                 )
             )
         }
