@@ -113,7 +113,7 @@ class TrackingService : Service(), SensorEventListener {
         }
 
         currentTrackPoints.add(routePoint)
-        Timber.i("addedDistance: $addedDistance, addedTime: $addedTime")
+        Timber.i("${currentTrackPoints.size} addedDistance: $addedDistance, addedTime: $addedTime")
         locationFlow.emit(routePoint)
 
         val computedSpeed = if (addedTime > 0) (addedDistance / (addedTime / 3600.0)) else 0.0

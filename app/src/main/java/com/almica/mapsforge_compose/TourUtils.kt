@@ -15,7 +15,7 @@ import kotlin.math.sqrt
 import java.io.File
 
 object TourUtils {
-    data class Point(val x: Double, val y: Double, val z: Double)
+    data class Point(val x: Double, val y: Double, val z: Double, val time: Long = 0L)
     const val EARTH_RADIUS_M: Double = 6378137.0
     fun getMercatorY(lat: Double): Double {
         val sinLat = sin(Math.toRadians(lat))
@@ -34,18 +34,19 @@ object TourUtils {
             x = getMercatorX(routePoint.longitude),
             y = getMercatorY(routePoint.latitude),
             z = routePoint.altitude,
+            time = routePoint.time
         )
     }
     fun List<Point>.toRoutePoints(): List<RoutePoint> = map { point ->
-        mercatorToLatLng(point.x, point.y, point.z)
+        mercatorToLatLng(point.x, point.y, point.z, point.time)
     }
-    fun mercatorToLatLng(x: Double, y: Double, z: Double): RoutePoint {
+    fun mercatorToLatLng(x: Double, y: Double, z: Double, time: Long): RoutePoint {
         val earthRadius = 6378137.0
 
         val longitude = (x / earthRadius) * (180.0 / Math.PI)
         val latitude = atan(sinh(y / earthRadius)) * (180.0 / Math.PI)
 
-        return RoutePoint(latitude, longitude, z)
+        return RoutePoint(latitude, longitude, z, time)
     }
     /**
      * Simplifies a polyline to a target number of coordinates using a

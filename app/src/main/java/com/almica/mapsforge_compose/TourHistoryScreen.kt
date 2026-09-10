@@ -370,7 +370,7 @@ fun TourHistoryScreen(
                                             tour.copy(
                                                 routePoints = simplifiedPoints,
                                                 totalDistanceKm = newStats.totalDistanceKm,
-                                                elevationGainMeters = newStats.elevationGainMeters
+                                                elevationGainMeters = newStats.elevationGainMeters,
                                             )
                                         }
                                         db.tourDao().updateTour(updatedTour)
