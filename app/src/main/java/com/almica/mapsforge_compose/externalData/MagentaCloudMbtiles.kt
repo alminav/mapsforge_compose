@@ -1,5 +1,8 @@
 package com.almica.mapsforge_compose.externalData
-
+/**
+ * 11sep2026
+ * not needed in this app, but kept for ramani app
+ */
 class MagentaCloudMbtiles {
     companion object {
         val phonemaps: Map<String, String> =
@@ -24,7 +27,7 @@ class MagentaCloudMbtiles {
                 Pair("tile_550_327_10_Phonemaps.mbtiles", "https://magentacloud.de/public.php/dav/files/sZe9xTNsxpcSGCH"),
                 Pair("tile_551_327_10_Phonemaps.mbtiles", "https://magentacloud.de/public.php/dav/files/j8xGjDPAjw4rYJP")
             )
-        val opentopomap: Map<String, String> =
+        val opentopo: Map<String, String> =
             mapOf(
                 Pair("tile_539_336_10_OpenTopo.mbtiles", "https://magentacloud.de/public.php/dav/files/p8nfdebnxafWNtY"),
                 Pair("tile_539_337_10_OpenTopo.mbtiles", "https://magentacloud.de/public.php/dav/files/ZMLo92zjcoxsGC7"),
