@@ -53,5 +53,9 @@ class MagentaCloudMbtiles {
             mapOf(
                 Pair("tile_541_338_10_Thunderforest.mbtiles", "https://magentacloud.de/public.php/dav/files/txy4FfZHyN4oQjY")
             )
+        val germany: Map<String, String> =
+            mapOf(
+                Pair("germany10.mbtiles", "https://magentacloud.de/public.php/dav/files/3Qo6jRSZXDpsEr5")
+            )
     }
 }
