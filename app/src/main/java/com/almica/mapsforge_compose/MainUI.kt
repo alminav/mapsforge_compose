@@ -149,8 +149,12 @@ fun MainScreen(viewModel: MainViewModel) {
                 stats = tourStats,
                 onMove = viewModel::setTargetPosition,
                 onZoomChanged = viewModel::setZoomLevel,
-                onStartTracking = { viewModel.startTracking(context) },
-                onStopTracking = { viewModel.stopTracking(context) },
+                onStartTracking = {
+                    viewModel.startTracking(context)
+                    viewModel.setKeepScreenOn(true) },
+                onStopTracking = {
+                    viewModel.stopTracking(context)
+                    viewModel.setKeepScreenOn(false) },
                 searchAddressPreset = uiState.pendingPoiAddress,
                 onDismissSearchPreset = { viewModel.setPendingPoiAddress(null) },
                 onAddPoi = { label, desc, latLong ->
