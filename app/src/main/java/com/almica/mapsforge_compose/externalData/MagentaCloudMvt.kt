@@ -6,6 +6,10 @@ package com.almica.mapsforge_compose.externalData
  */
 class MagentaCloudMvt {
     companion object {
+        fun getAllData(): Map<String, String> {
+            return germany_north + germany_south + at_ch
+        }
+
         val germany_north: Map<String, String> =
             mapOf(
                 Pair("mvt_260_194_9.mbtiles", "https://magentacloud.de/public.php/dav/files/JD2AsCAf5r8S39R"),

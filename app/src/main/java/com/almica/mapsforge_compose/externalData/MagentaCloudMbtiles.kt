@@ -1,9 +1,13 @@
 package com.almica.mapsforge_compose.externalData
+
 /**
  * 11sep2026
  * not needed in this app, but kept for ramani app
  */
 class MagentaCloudMbtiles {
+    fun getAllData(): Map<String, String> {
+        return phonemaps + opentopo + outdoor + thunderforest + germany
+    }
     companion object {
         val phonemaps: Map<String, String> =
             mapOf(
