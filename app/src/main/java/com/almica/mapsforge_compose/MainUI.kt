@@ -257,7 +257,11 @@ fun MainScreen(viewModel: MainViewModel) {
                     viewModel.setIsAppending(false)
                     viewModel.setScreen(AppScreen.MAP)
                 },
-                currentMapPosition = uiState.targetPosition
+                currentMapPosition = uiState.targetPosition,
+                onSrtmRefresh = {
+                    Timber.i("Refresh SRTM files")
+                    viewModel.refreshMapFiles()
+                }
             )
         },
         settingsScreen = {

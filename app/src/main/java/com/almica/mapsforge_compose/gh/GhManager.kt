@@ -18,6 +18,7 @@ import com.graphhopper.util.shapes.GHPoint3D
 import com.google.maps.android.SphericalUtil
 import com.google.android.gms.maps.model.LatLng
 import androidx.preference.PreferenceManager
+import com.almica.mapsforge_compose.gh.HgtReader.Companion.getTileName
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
@@ -188,7 +189,7 @@ class GhManager internal constructor(context: Context, initListener: InitListene
     ): GHResponse {
         Timber.i("startX: $startX startY: $startY")
         val tileName = getTileName(stopY, stopX).uppercase()
-        val demFolder = File(context.filesDir, Const.HGT_FOLDER_NAME)
+        val demFolder = File(context.getExternalFilesDir(null), Const.HGT_FOLDER_NAME)
         val hgtFile = File(demFolder, tileName + Const.HGT_EXT)
         var hgtReader: HgtReader? = null
         if (hgtFile.exists())

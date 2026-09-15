@@ -2,7 +2,9 @@ package com.almica.mapsforge_compose
 
 import android.content.Context
 import androidx.preference.PreferenceManager
+import com.almica.mapsforge_compose.gh.Const
 import com.almica.mapsforge_compose.gh.HgtReader
+import com.almica.mapsforge_compose.gh.HgtReader.SrtmRefresh
 import com.google.android.gms.maps.model.LatLng
 import timber.log.Timber
 import java.util.PriorityQueue
@@ -159,5 +161,15 @@ object TourUtils {
                 altitude = elevation
             )
         }
+    }
+
+    fun List<RoutePoint>.refreshRouteElevationFromSrtm(context: Context): SrtmRefresh {
+        val hgtFolder = File(context.getExternalFilesDir(null), Const.HGT_FOLDER_NAME)
+        val hgtFile = firstOrNull()?.let { first ->
+            val tileName = HgtReader.getTileName(first.latitude, first.longitude)
+            File(hgtFolder, "$tileName${Const.HGT_EXT}")
+        } ?: SettingsRepository(context).getSelectedHgtFileName()?.let { File(hgtFolder, it) }
+
+        return HgtReader(context, hgtFile).refreshRouteElevationFromSrtm(this, withDownload = true)
     }
 }

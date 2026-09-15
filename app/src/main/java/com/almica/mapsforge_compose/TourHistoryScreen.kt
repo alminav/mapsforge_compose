@@ -42,13 +42,14 @@ import androidx.compose.material.icons.filled.Polyline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Timeline
-import com.almica.mapsforge_compose.TourUtils.refreshElevation
 import com.almica.mapsforge_compose.TourUtils.simplifyToTargetCount
 import com.almica.mapsforge_compose.charts.Const
 import com.almica.mapsforge_compose.charts.ElevationChart
 import com.almica.mapsforge_compose.charts.GradientChart
 import com.almica.mapsforge_compose.charts.SpeedChart
 import androidx.compose.material.icons.filled.Speed
+import com.almica.mapsforge_compose.TourUtils.refreshRouteElevationFromSrtm
+import timber.log.Timber
 
 enum class TourSortOption {
     DATE_DESC, NAME_ASC, DISTANCE_DESC, DISTANCE_ASC, PROXIMITY_ASC
@@ -60,7 +61,8 @@ fun TourHistoryScreen(
     db: TourDatabase,
     onTourSelected: (TourEntity) -> Unit,
     onClose: () -> Unit,
-    currentMapPosition: LatLong? = null
+    currentMapPosition: LatLong? = null,
+    onSrtmRefresh: () -> Unit = {}
 ) {
     BackHandler(onBack = onClose)
 
@@ -382,16 +384,30 @@ fun TourHistoryScreen(
                             }, onSrtmRefresh = {
                                 scope.launch {
                                     try {
-                                        val updatedTour = withContext(Dispatchers.IO) {
-                                            val refreshedPoints = tour.routePoints.refreshElevation(context)
-                                            val newStats = TrackStatsCalculator.calculateStats(refreshedPoints)
-                                            tour.copy(
-                                                routePoints = refreshedPoints,
-                                                elevationGainMeters = newStats.elevationGainMeters
-                                            )
+                                        val refreshResult = withContext(Dispatchers.IO) {
+                                            val hgtResult = tour.routePoints.refreshRouteElevationFromSrtm(context)
+                                            hgtResult.routePoints?.let { points ->
+                                                if (hgtResult.hasDownloaded == 0)
+                                                    Timber.i("Refreshing elevation with ${hgtResult.usedHgtFiles}")
+                                                else
+                                                    Timber.i("Refreshing elevation missing ${hgtResult.missingHgtFiles}")
+                                                val newStats = TrackStatsCalculator.calculateStats(points)
+                                                val updatedTour = tour.copy(
+                                                    routePoints = points,
+                                                    elevationGainMeters = newStats.elevationGainMeters
+                                                )
+                                                db.tourDao().updateTour(updatedTour)
+                                            }
+                                            hgtResult
                                         }
-                                        db.tourDao().updateTour(updatedTour)
-                                        snackbarHostState.showSnackbar("Elevation data refreshed")
+
+                                        val downloadedCount = refreshResult.hasDownloaded
+                                        if (downloadedCount > 0) {
+                                            snackbarHostState.showSnackbar("Downloaded $downloadedCount hgt files")
+                                            onSrtmRefresh()
+                                        } else {
+                                            snackbarHostState.showSnackbar("Elevation data refreshed")
+                                        }
                                     } catch (e: Exception) {
                                         snackbarHostState.showSnackbar("Refresh failed: ${e.localizedMessage}")
                                     }

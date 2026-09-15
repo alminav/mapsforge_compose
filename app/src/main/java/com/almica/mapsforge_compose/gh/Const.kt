@@ -1,6 +1,8 @@
 package com.almica.mapsforge_compose.gh
 
 object Const {
+    const val HGT_TAG: String = "hgt"
+    const val ZIP_EXT: String = ".zip"
     const val ZIP_EXTENSION: String = ".zip"
     const val GHZ_EXTENSION: String = ".ghz"
     const val MAPFOLDER: String = "maps"
