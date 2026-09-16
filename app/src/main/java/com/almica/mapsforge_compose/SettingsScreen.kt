@@ -1,5 +1,6 @@
 package com.almica.mapsforge_compose
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -17,16 +20,18 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.almica.mapsforge_compose.externalData.MagentaCloud
 import com.almica.mapsforge_compose.externalData.MagentaCloudDownloader
 import com.almica.mapsforge_compose.gh.Const
@@ -35,7 +40,8 @@ import com.almica.mapsforge_compose.gh.RoundtripValuePickerDialog
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
-import androidx.compose.ui.platform.LocalResources
+import androidx.core.net.toUri
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -234,6 +240,7 @@ fun SettingsScreenContent(
     var showMapSelectionDialog by remember { mutableStateOf(false) }
     var showHgtSelectionDialog by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
+    var showWebView by remember { mutableStateOf(false) }
 
     val ghZipPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -292,8 +299,21 @@ fun SettingsScreenContent(
             onRegionSelected = { region ->
                 onDownloadMap(region)
                 showDownloadDialog = false
+            },
+            webMapsforgeServer = {
+                showWebView = true
+                showDownloadDialog = false
             }
         )
+    }
+
+    if (showWebView) {
+        LaunchedEffect(Unit) {
+            val url = "https://download.mapsforge.org"
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+            context.startActivity(intent)
+            showWebView = false
+        }
     }
 
     if (showRoundtripDialog) {
@@ -590,7 +610,9 @@ fun GeneralSettingsTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f).clickable { onHgtSelectionClick() }) {
+                    Column(modifier = Modifier
+                        .weight(1f)
+                        .clickable { onHgtSelectionClick() }) {
                         Text(text = "HGT Wahl", style = MaterialTheme.typography.bodyLarge)
                         Text(
                             text = if (selectedHgtFileName != null) "Gewählt: $selectedHgtFileName" else "Keine HGT Datei gewählt",
@@ -616,7 +638,9 @@ fun GeneralSettingsTab(
 
         item {
             Card(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 240.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 LazyColumn(
@@ -679,7 +703,9 @@ fun MapSettingsTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f).clickable { onMapSelectionClick() }) {
+                    Column(modifier = Modifier
+                        .weight(1f)
+                        .clickable { onMapSelectionClick() }) {
                         Text(text = "Kartenwahl", style = MaterialTheme.typography.bodyLarge)
                         Text(
                             text = if (selectedMapFileName != null) "Gewählt: $selectedMapFileName" else "Keine manuelle Karte gewählt",
@@ -757,7 +783,9 @@ fun MapSettingsTab(
 
         item {
             Card(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 240.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 LazyColumn(
@@ -926,7 +954,9 @@ fun RoutingSettingsTab(
         } else {
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 240.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     LazyColumn(
@@ -982,7 +1012,9 @@ fun RoutingSettingsTab(
 
         item {
             Card(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 240.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 LazyColumn(
@@ -1122,14 +1154,22 @@ fun MapSelectionDialog(
 @Composable
 fun DownloadMapDialog(
     onDismissRequest: () -> Unit,
-    onRegionSelected: (MapRegion) -> Unit
+    onRegionSelected: (MapRegion) -> Unit,
+    webMapsforgeServer: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text("Karte herunterladen") },
+        title = {
+            Column {
+                Text("Karte herunterladen", style = MaterialTheme.typography.titleMedium)
+                TextButton({webMapsforgeServer()}) {Text("Mapsforge Download Server")}
+            }
+        },
         text = {
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(MapRegions.AVAILABLE_REGIONS.filter { it.downloadUrl.isNotEmpty() }) { region ->

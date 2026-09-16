@@ -541,9 +541,15 @@ fun TourHistoryItem(
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = stringResource(R.string.tour_distance, tour.totalDistanceKm))
+                    val distanceResId = when {
+                        tour.totalDistanceKm > 100.0 -> R.string.tour_distance_0
+                        tour.totalDistanceKm > 10.0 -> R.string.tour_distance_1
+                        else -> R.string.tour_distance_2
+                    }
+                    Text(text = stringResource(distanceResId, tour.totalDistanceKm))
                     if (hasBarometer) {
                         Text(text = stringResource(R.string.tour_elevation, tour.elevationGainMeters))
                     } else {

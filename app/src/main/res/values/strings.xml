@@ -3,7 +3,9 @@
     <string name="tour_history_title">Tours</string>
     <string name="tour_history_empty">No tours recorded yet.</string>
     <string name="tour_close_description">Close</string>
-    <string name="tour_distance">Distance: %.2f km</string>
+    <string name="tour_distance_0">Distance: %.0f km</string>
+    <string name="tour_distance_1">Distance: %.1f km</string>
+    <string name="tour_distance_2">Distance: %.2f km</string>
     <string name="tour_elevation">Ascent: %.0f m</string>
     <string name="tour_elevation_difference">Elevation difference: %.0f m</string>
     <string name="tour_points">Points: %d</string>

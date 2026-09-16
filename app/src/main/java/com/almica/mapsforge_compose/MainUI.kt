@@ -509,7 +509,7 @@ fun MapViewContainer(
     onCalculateRoute: (Double, Double, Double, Double) -> Unit,
     onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit
 ) {
-    val mapFile = remember<File?>(uiState.currentRegion, uiState.selectedMapFileName) {
+    val mapFile = remember(uiState.currentRegion, uiState.selectedMapFileName) {
         uiState.mapDir?.let { dir ->
             val fileName = uiState.selectedMapFileName ?: uiState.currentRegion.fileName
             File(dir, fileName)

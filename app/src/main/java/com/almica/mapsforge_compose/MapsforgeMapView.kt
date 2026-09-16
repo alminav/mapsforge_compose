@@ -17,6 +17,8 @@ import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.rendertheme.ExternalRenderTheme
 import org.mapsforge.map.rendertheme.InternalRenderTheme
 import androidx.compose.ui.platform.LocalContext
+import com.almica.mapsforge_compose.gh.Const
+import org.mapsforge.map.datastore.MultiMapDataStore
 import org.mapsforge.map.reader.MapFile
 import timber.log.Timber
 import java.io.File
@@ -64,13 +66,15 @@ fun MapsforgeMapView(
     val gpsMarker = remember { createGpsMarker() }
     val loadedPolyline = remember { createPolyline(Color.RED) }
     val activePolyline = remember { createPolyline(Color.GREEN) }
+    val mapFolder = remember { File(context.getExternalFilesDir(null), Const.MAPFOLDER) }
+    val coastlineMapFile = remember { File(mapFolder, "coastline.map") }
 
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { ctx ->
             MapView(ctx).apply {
                 isClickable = true
-                mapZoomControls.setShowMapZoomControls(true)
+                mapZoomControls.isShowMapZoomControls = true
 
                 model.mapViewPosition.addObserver {
                     val newCenter = model.mapViewPosition.center
@@ -86,9 +90,17 @@ fun MapsforgeMapView(
                     }
                 }
 
+                val fileName = mapFile?.name?.lowercase() ?: ""
+                val isTileMap = fileName.matches(Regex("^[ns]\\d{2}[ew]\\d{3}.*\\.map$"))
+
                 if (mapFile?.exists() == true) {
                     try {
-                        val mapDataStore = MapFile(mapFile)
+                        val mapDataStore = MultiMapDataStore().apply {
+                            if (isTileMap && coastlineMapFile.exists()) {
+                                addMapDataStore(MapFile(coastlineMapFile), false, false)
+                            }
+                            addMapDataStore(MapFile(mapFile), true, true)
+                        }
                         val trl = TileRendererLayer(
                             tileCache, mapDataStore, model.mapViewPosition, AndroidGraphicFactory.INSTANCE
                         )

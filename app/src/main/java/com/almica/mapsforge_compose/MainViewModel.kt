@@ -210,6 +210,7 @@ class MainViewModel(
             try {
                 val targetDir = mapDir ?: return@withContext
                 val worldMapFile = File(targetDir, "world.map")
+                val coastlineMapFile = File(targetDir, "coastline.map")
                 if (!MapDownloader.isMapFileValid(worldMapFile)) {
                     targetDir.mkdirs()
                     getApplication<Application>().assets.open("world.map").use { input ->
@@ -218,6 +219,15 @@ class MainViewModel(
                         }
                     }
                     Timber.i("Copied world.map from assets to ${worldMapFile.absolutePath}")
+                }
+                if (!MapDownloader.isMapFileValid(coastlineMapFile)) {
+                    targetDir.mkdirs()
+                    getApplication<Application>().assets.open("coastline.map").use { input ->
+                        FileOutputStream(coastlineMapFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Timber.i("Copied world.map from assets to ${coastlineMapFile.absolutePath}")
                 }
             } catch (e: Exception) {
                 // Fail silently if asset is not present or copy fails, as it's an optional background map
