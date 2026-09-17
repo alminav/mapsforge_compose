@@ -708,28 +708,38 @@ class MainViewModel(
 
     private fun calculateDistanceMarkers(points: List<RoutePoint>, isActive: Boolean): List<DistanceMarker> {
         if (points.isEmpty()) return emptyList()
+
+        val stats = TrackStatsCalculator.calculateStats(points)
+        val totalDistance = stats.totalDistanceKm
+
+        // Determine interval based on total distance
+        val interval = when {
+            totalDistance < 50.0 -> 1      // Every 1km for routes up to 50km
+            totalDistance < 200.0 -> 10    // Every 10km for routes up to 200km
+            totalDistance < 2000.0 -> 100  // Every 100km for routes up to 2000km
+            else -> 500                    // Every 500km for very long routes
+        }
+
         val markers = mutableListOf<DistanceMarker>()
-        var totalDistKm = 0.0
-        var lastMilestone = 0
+        var accumulatedDistKm = 0.0
+        var nextMilestone = interval
 
         for (i in 0 until points.size - 1) {
             val p1 = points[i]
             val p2 = points[i + 1]
-            totalDistKm += TrackStatsCalculator.calculateDistanceKm(
+            accumulatedDistKm += TrackStatsCalculator.calculateDistanceKm(
                 LatLong(p1.latitude, p1.longitude),
                 LatLong(p2.latitude, p2.longitude)
             )
-            val currentKm = totalDistKm.toInt()
-            if (currentKm > lastMilestone) {
-                markers.add(DistanceMarker(LatLong(p2.latitude, p2.longitude), currentKm, isActive))
-                lastMilestone = currentKm
+
+            while (accumulatedDistKm >= nextMilestone) {
+                markers.add(DistanceMarker(LatLong(p2.latitude, p2.longitude), nextMilestone, isActive))
+                nextMilestone += interval
             }
         }
         return markers
     }
 
-    fun getExternalFilesDir() = externalFilesDir
-    
     fun getSettingsRepository() = settingsRepository
     fun calculateRoute(context: Context, startLat: Double, startLon: Double, stopLat: Double, stopLon: Double) {
         val folderName = settingsRepository.getGraphHopperFolder() ?: "n52e0103d"

@@ -242,7 +242,7 @@ private fun updateDistanceMarkers(
 
     // Add new markers
     markers.forEach { dm ->
-        val marker = createDistanceMarkerOverlay(dm, zoomLevel, map)
+        val marker = createDistanceMarkerOverlay(dm, zoomLevel)
         layers.add(marker)
     }
 }
@@ -255,7 +255,7 @@ private class DistanceMarkerOverlay(
     val isActive: Boolean
 ) : Marker(latLong, bitmap, 0, 0)
 
-private fun createDistanceMarkerOverlay(dm: DistanceMarker, zoomLevel: Int, mapView: MapView): DistanceMarkerOverlay {
+private fun createDistanceMarkerOverlay(dm: DistanceMarker, zoomLevel: Int): DistanceMarkerOverlay {
     val radius = (zoomLevel * 1.8f).toInt().coerceIn(20, 56)
     val size = radius * 2 + 12
     val bitmap = AndroidGraphicFactory.INSTANCE.createBitmap(size, size)
