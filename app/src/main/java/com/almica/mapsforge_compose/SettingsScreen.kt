@@ -22,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
@@ -29,9 +30,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.almica.mapsforge_compose.externalData.MagentaCloud
 import com.almica.mapsforge_compose.externalData.MagentaCloudDownloader
 import com.almica.mapsforge_compose.gh.Const
@@ -240,8 +238,10 @@ fun SettingsScreenContent(
     var showMapSelectionDialog by remember { mutableStateOf(false) }
     var showHgtSelectionDialog by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
-    var showWebView by remember { mutableStateOf(false) }
-
+    var showWebViewMapsforge by remember { mutableStateOf(false) }
+    var showWebViewMagentaCloudMaps by remember { mutableStateOf(false) }
+    var showWebViewMagentaCloudGh by remember { mutableStateOf(false) }
+    var showWebViewMagentaCloudHgt by remember { mutableStateOf(false) }
     val ghZipPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -301,18 +301,45 @@ fun SettingsScreenContent(
                 showDownloadDialog = false
             },
             webMapsforgeServer = {
-                showWebView = true
+                showWebViewMapsforge = true
                 showDownloadDialog = false
             }
         )
     }
 
-    if (showWebView) {
+    if (showWebViewMapsforge) {
         LaunchedEffect(Unit) {
             val url = "https://download.mapsforge.org"
             val intent = Intent(Intent.ACTION_VIEW, url.toUri())
             context.startActivity(intent)
-            showWebView = false
+            showWebViewMapsforge = false
+        }
+    }
+
+    if (showWebViewMagentaCloudMaps) {
+        LaunchedEffect(Unit) {
+            val url = "https://magentacloud.de/s/ZcLySmdZLD2keBL"
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+            context.startActivity(intent)
+            showWebViewMapsforge = false
+        }
+    }
+
+    if (showWebViewMagentaCloudGh) {
+        LaunchedEffect(Unit) {
+            val url = "https://magentacloud.de/s/GkSk423Nxo7xtWN"
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+            context.startActivity(intent)
+            showWebViewMapsforge = false
+        }
+    }
+
+    if (showWebViewMagentaCloudHgt) {
+        LaunchedEffect(Unit) {
+            val url = "https://magentacloud.de/s/YcX9NAW7GjZT49J"
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+            context.startActivity(intent)
+            showWebViewMapsforge = false
         }
     }
 
@@ -445,24 +472,27 @@ fun SettingsScreenContent(
                         Timber.i("Download HGT: $name $link")
                         startHgtDownload(name, link)
                     },
-                    hgtFiles = hgtFiles
+                    hgtFiles = hgtFiles,
+                    webMagentaCloudHgt = { showWebViewMagentaCloudHgt = true }
                 )
                 1 -> MapSettingsTab(
                     mapFiles = mapFiles,
                     selectedMapFileName = selectedMapFileName,
                     onMapSelectionClick = { showMapSelectionDialog = true },
                     onMapFileReset = { onMapFileSelected(null) },
-                    onDownloadClick = { showDownloadDialog = true },
+                    onMapsforgeDownload = { showDownloadDialog = true },
+                    webMagentaCloudMaps = { showWebViewMagentaCloudMaps = true },
                     selectedThemeId = selectedThemeId,
                     themeFilePath = themeFilePath,
                     onThemeSelected = {
                         selectedThemeId = it
                         onThemeSelected(it)
                     },
-                    onDownloadMap = { name, link ->
-                        Timber.i("Download GHZ: $name $link")
-                        startMapDownload(name, link) }
-                )
+                    onMapsforgeDownloadClick = { name, link ->
+                    Timber.i("Download Mapsforge: $name $link")
+                    startMapDownload(name, link)
+                })
+
                 2 -> RoutingSettingsTab(
                     roundtripFactor = roundtripFactor,
                     onRoundtripClick = { showRoundtripDialog = true },
@@ -481,7 +511,8 @@ fun SettingsScreenContent(
                     onImportGhZip = { ghZipPickerLauncher.launch("*/*") },
                     onDownloadGhz = { name, link ->
                         Timber.i("Download GHZ: $name $link")
-                        startGhzDownload(name, link) }
+                        startGhzDownload(name, link) },
+                    webMagentaCloudGh = { showWebViewMagentaCloudGh = true }
                 )
             }
         }
@@ -500,7 +531,8 @@ fun GeneralSettingsTab(
     onHgtSelectionClick: () -> Unit,
     onHgtFileReset: () -> Unit,
     onDownloadHgt: (String, String) -> Unit,
-    hgtFiles: List<String>
+    hgtFiles: List<String>,
+    webMagentaCloudHgt: () -> Unit
 ) {
     val context = LocalContext.current
     val hgtItems by remember(hgtFiles) {
@@ -629,11 +661,15 @@ fun GeneralSettingsTab(
         }
 
         item {
-            Text(
-                text = "Verfügbare HGT-Downloads",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
+            TextButton(onClick = { webMagentaCloudHgt() }) {
+                Icon(
+                    painter = painterResource(id = R.mipmap.magenta_cloud),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(48.dp).padding(end = 8.dp)
+                )
+                Text("Magenta Cloud")
+            }
         }
 
         item {
@@ -666,11 +702,12 @@ fun MapSettingsTab(
     selectedMapFileName: String?,
     onMapSelectionClick: () -> Unit,
     onMapFileReset: () -> Unit,
-    onDownloadClick: () -> Unit,
+    onMapsforgeDownload: () -> Unit,
     selectedThemeId: String,
     themeFilePath: String?,
     onThemeSelected: (String) -> Unit,
-    onDownloadMap: (String, String) -> Unit
+    onMapsforgeDownloadClick: (String, String) -> Unit,
+    webMagentaCloudMaps: () -> Unit
 ) {
     val mapsItems by remember(mapFiles) {
         derivedStateOf {
@@ -715,9 +752,6 @@ fun MapSettingsTab(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = onDownloadClick) {
-                            Text("Download")
-                        }
                         if (selectedMapFileName != null) {
                             TextButton(onClick = onMapFileReset) {
                                 Text("Reset")
@@ -774,11 +808,26 @@ fun MapSettingsTab(
             }
         }
         item {
-            Text(
-                text = "Verfügbare Map-Downloads",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Row {
+                TextButton(modifier = Modifier.weight(0.5f), onClick = { webMagentaCloudMaps() }) {
+                    Icon(
+                        painter = painterResource(id = R.mipmap.magenta_cloud),
+                        contentDescription = null,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(48.dp).padding(end = 8.dp)
+                    )
+                    Text("Magenta Cloud")
+                }
+                TextButton(modifier = Modifier.weight(0.5f), onClick = { onMapsforgeDownload() }) {
+                    Icon(
+                        painter = painterResource(id = R.mipmap.mapsforge),
+                        contentDescription = null,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(48.dp).padding(end = 8.dp)
+                    )
+                    Text("Mapsforge Server")
+                }
+            }
         }
 
         item {
@@ -796,7 +845,7 @@ fun MapSettingsTab(
                     items(mapsItems, key = { it.fileName }) { item ->
                         DownloadItemRow(
                             item = item,
-                            onDownloadClick = { onDownloadMap(item.fileName, item.downloadUrl) }
+                            onDownloadClick = { onMapsforgeDownloadClick(item.fileName, item.downloadUrl) }
                         )
                     }
                 }
@@ -816,7 +865,8 @@ fun RoutingSettingsTab(
     onGhFolderSelected: (String) -> Unit,
     onGhFolderDeleted: (String) -> Unit,
     onImportGhZip: () -> Unit,
-    onDownloadGhz: (String, String) -> Unit
+    onDownloadGhz: (String, String) -> Unit,
+    webMagentaCloudGh: () -> Unit
 ) {
 // In RoutingSettingsTab
     val ghItems by remember(ghFolders) {
@@ -1003,11 +1053,15 @@ fun RoutingSettingsTab(
         item { Spacer(modifier = Modifier.height(16.dp)) }
 
         item {
-            Text(
-                text = "Verfügbare Routing-Downloads",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
+            TextButton(onClick = { webMagentaCloudGh() }) {
+                Icon(
+                    painter = painterResource(id = R.mipmap.magenta_cloud),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(48.dp).padding(end = 8.dp)
+                )
+                Text("Magenta Cloud")
+            }
         }
 
         item {
@@ -1162,7 +1216,9 @@ fun DownloadMapDialog(
         title = {
             Column {
                 Text("Karte herunterladen", style = MaterialTheme.typography.titleMedium)
-                TextButton({webMapsforgeServer()}) {Text("Mapsforge Download Server")}
+                TextButton(onClick = webMapsforgeServer) {
+                    Text("Mapsforge Download Server")
+                }
             }
         },
         text = {

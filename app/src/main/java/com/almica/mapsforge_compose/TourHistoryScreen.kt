@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -50,6 +52,7 @@ import com.almica.mapsforge_compose.charts.SpeedChart
 import androidx.compose.material.icons.filled.Speed
 import com.almica.mapsforge_compose.TourUtils.refreshRouteElevationFromSrtm
 import timber.log.Timber
+import androidx.compose.ui.platform.LocalLocale
 
 enum class TourSortOption {
     DATE_DESC, NAME_ASC, DISTANCE_DESC, DISTANCE_ASC, PROXIMITY_ASC
@@ -101,9 +104,7 @@ fun TourHistoryScreen(
     var tourToExport by remember { mutableStateOf<TourEntity?>(null) }
     var isImporting by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
-    var selectedTourForGradient by rememberSaveable { mutableStateOf<TourEntity?>(null) }
-    var selectedTourForElevation by rememberSaveable { mutableStateOf<TourEntity?>(null) }
-    var selectedTourForSpeed by rememberSaveable { mutableStateOf<TourEntity?>(null) }
+    var selectedTourForCharts by rememberSaveable { mutableStateOf<Pair<TourEntity, Int>?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -412,66 +413,25 @@ fun TourHistoryScreen(
                                         snackbarHostState.showSnackbar("Refresh failed: ${e.localizedMessage}")
                                     }
                                 }
-                            }, onGradientChart = {
-                                selectedTourForGradient = tour
-                            }, onElevationChart = {
-                                selectedTourForElevation = tour
-                            }, onSpeedChart = {
-                                selectedTourForSpeed = tour
+                            }, onShowCharts = { tour, page ->
+                                selectedTourForCharts = Pair(tour, page)
                             }
                         )
                     }
                 }
             }
         }
-        val tourForGradient = selectedTourForGradient
-        if (tourForGradient != null) {
+        val tourChartsData = selectedTourForCharts
+        if (tourChartsData != null) {
             ModalBottomSheet(
-                onDismissRequest = { selectedTourForGradient = null },
+                onDismissRequest = { selectedTourForCharts = null },
                 sheetState = sheetState,
                 contentWindowInsets = { BottomSheetDefaults.windowInsets }
             ) {
-                GradientChart(
-                    tourEntity = tourForGradient,
-                    moveMap = { },
-                    onDismiss = { selectedTourForGradient = null }
-                )
-            }
-        }
-        val tourForElevation = selectedTourForElevation
-        if (tourForElevation != null) {
-            ModalBottomSheet(
-                onDismissRequest = { selectedTourForElevation = null },
-                sheetState = sheetState,
-                contentWindowInsets = { BottomSheetDefaults.windowInsets }
-            ) {
-                ElevationChart(
-                    dataPoints = tourForElevation.routePoints.toDataPoints(),
-                    titleExtension = tourForElevation.name,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    onPointSelected = {},
-                    onClose = { selectedTourForElevation = null },
-                    currentLatLng = null
-                )
-            }
-        }
-        val tourForSpeed = selectedTourForSpeed
-        if (tourForSpeed != null) {
-            ModalBottomSheet(
-                onDismissRequest = { selectedTourForSpeed = null },
-                sheetState = sheetState,
-                contentWindowInsets = { BottomSheetDefaults.windowInsets }
-            ) {
-                val dataPoints = remember(tourForSpeed) { tourForSpeed.routePoints.toDataPoints(tourForSpeed.startTime) }
-                SpeedChart(
-                    dataPoints = dataPoints,
-                    titleExtension = tourForSpeed.name,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    onClose = { selectedTourForSpeed = null }
+                TourChartsPager(
+                    tour = tourChartsData.first,
+                    initialPage = tourChartsData.second,
+                    onClose = { selectedTourForCharts = null }
                 )
             }
         }
@@ -506,9 +466,7 @@ fun TourHistoryItem(
     onExportKml: () -> Unit,
     onSimplify: () -> Unit,
     onSrtmRefresh: () -> Unit,
-    onGradientChart: () -> Unit,
-    onElevationChart: () -> Unit,
-    onSpeedChart: () -> Unit
+    onShowCharts: (TourEntity, Int) -> Unit
 ) {
     val dateString = remember(tour.timestamp) {
         SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(tour.timestamp))
@@ -590,7 +548,7 @@ fun TourHistoryItem(
                         text = { Text(stringResource(R.string.tour_menu_gradient_chart)) },
                         onClick = {
                             expanded = false
-                            onGradientChart()
+                            onShowCharts(tour, 0)
                         },
                         leadingIcon = { Icon(Icons.Default.BarChart, contentDescription = null) }
                     )
@@ -599,7 +557,7 @@ fun TourHistoryItem(
                         text = { Text(stringResource(R.string.tour_menu_elevation_chart)) },
                         onClick = {
                             expanded = false
-                            onElevationChart()
+                            onShowCharts(tour, 1)
                         },
                         leadingIcon = { Icon(Icons.Default.Timeline, contentDescription = null) }
                     )
@@ -608,7 +566,7 @@ fun TourHistoryItem(
                         text = { Text(stringResource(R.string.tour_menu_speed_chart)) },
                         onClick = {
                             expanded = false
-                            onSpeedChart()
+                            onShowCharts(tour, 2)
                         },
                         leadingIcon = { Icon(Icons.Default.Speed, contentDescription = null) }
                     )
@@ -707,8 +665,64 @@ fun TourHistoryItemPreview() {
         onExportKml = {},
         onSimplify = {},
         onSrtmRefresh = {},
-        onGradientChart = {},
-        onElevationChart = {},
-        onSpeedChart = {}
+        onShowCharts = { _, _ -> }
     )
+}
+
+@Composable
+fun TourChartsPager(
+    tour: TourEntity,
+    initialPage: Int = 0,
+    onClose: () -> Unit
+) {
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { 3 })
+    val scope = rememberCoroutineScope()
+    val dataPoints = remember(tour) { tour.routePoints.toDataPoints(tour.startTime) }
+
+    Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.6f)) {
+        SecondaryTabRow(selectedTabIndex = pagerState.currentPage) {
+            Tab(
+                selected = pagerState.currentPage == 0,
+                onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                text = { Text(stringResource(R.string.tour_menu_gradient_chart)) }
+            )
+            Tab(
+                selected = pagerState.currentPage == 1,
+                onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                text = { Text(stringResource(R.string.tour_menu_elevation_chart)) }
+            )
+            Tab(
+                selected = pagerState.currentPage == 2,
+                onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
+                text = { Text(stringResource(R.string.tour_menu_speed_chart)) }
+            )
+        }
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        ) { page ->
+            when (page) {
+                0 -> GradientChart(
+                    tourEntity = tour,
+                    onDismiss = onClose,
+                    moveMap = { }
+                )
+                1 -> ElevationChart(
+                    dataPoints = dataPoints,
+                    titleExtension = tour.name
+                        ?: SimpleDateFormat("dd.MM.yyyy HH:mm", LocalLocale.current.platformLocale).format(Date(tour.timestamp)),
+                    modifier = Modifier.fillMaxSize(),
+                    onClose = onClose
+                )
+                2 -> SpeedChart(
+                    dataPoints = dataPoints,
+                    titleExtension = tour.name
+                        ?: SimpleDateFormat("dd.MM.yyyy HH:mm", LocalLocale.current.platformLocale).format(Date(tour.timestamp)),
+                    modifier = Modifier.fillMaxSize(),
+                    onClose = onClose
+                )
+            }
+        }
+    }
 }

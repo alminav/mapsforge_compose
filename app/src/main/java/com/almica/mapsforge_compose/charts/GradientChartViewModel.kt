@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 sealed class GradientChartUiState(
     open val latLng: LatLng? = null,
@@ -86,7 +89,9 @@ class GradientChartViewModel : ViewModel() {
             val lllh = tour.routePoints.map { LatLngH(it.latitude, it.longitude, it.altitude, it.time) }
             val routeDistance = tour.totalDistanceKm * 1000.0
             
-            loadData(tour.name ?: "Tour", lllh, routeDistance)
+            loadData(tour.name ?:
+                SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(tour.timestamp)),
+                    lllh, routeDistance)
         }
     }
 
