@@ -524,6 +524,7 @@ fun MapViewContainer(
         gpsLocation = gpsLocation,
         loadedTrackPoints = uiState.loadedTrackPoints,
         activeTrackPoints = uiState.activeTrackPoints,
+        distanceMarkers = uiState.distanceMarkers + uiState.activeDistanceMarkers,
         pois = uiState.pois,
         onMove = { latLong -> onMove(latLong) },
         onZoomChanged = { zoom -> onZoomChanged(zoom) },
@@ -579,6 +580,7 @@ fun MapViewContainerContent(
     gpsLocation: RoutePoint?,
     loadedTrackPoints: List<RoutePoint>,
     activeTrackPoints: List<RoutePoint>,
+    distanceMarkers: List<DistanceMarker> = emptyList(),
     pois: List<PoiEntity> = emptyList(),
     onMove: (LatLong) -> Unit,
     onZoomChanged: (Int) -> Unit,
@@ -620,6 +622,7 @@ fun MapViewContainerContent(
             currentLocation = gpsLocation,
             loadedTrackPoints = loadedTrackPoints,
             activeTrackPoints = activeTrackPoints,
+            distanceMarkers = distanceMarkers,
             pois = pois,
             followGps = followGps,
             state = remember { 
@@ -1194,6 +1197,7 @@ fun MainScreenPreview() {
                     RoutePoint(52.5220, 13.4070, 90.0)
                 ),
                 activeTrackPoints = emptyList(),
+                distanceMarkers = emptyList(),
                 onMove = {},
                 onZoomChanged = {},
                 onPoiClick = {},

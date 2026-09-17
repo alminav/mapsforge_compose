@@ -1,6 +1,5 @@
 package com.almica.mapsforge_compose
 
-import android.content.Context
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -10,7 +9,6 @@ import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
-import org.mapsforge.map.layer.cache.TileCache
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
@@ -18,6 +16,9 @@ import org.mapsforge.map.rendertheme.ExternalRenderTheme
 import org.mapsforge.map.rendertheme.InternalRenderTheme
 import androidx.compose.ui.platform.LocalContext
 import com.almica.mapsforge_compose.gh.Const
+import org.mapsforge.core.graphics.Align
+import org.mapsforge.core.graphics.Bitmap
+import org.mapsforge.core.graphics.Style
 import org.mapsforge.map.datastore.MultiMapDataStore
 import org.mapsforge.map.reader.MapFile
 import timber.log.Timber
@@ -39,6 +40,7 @@ fun MapsforgeMapView(
     currentLocation: RoutePoint?,
     loadedTrackPoints: List<RoutePoint>,
     activeTrackPoints: List<RoutePoint>,
+    distanceMarkers: List<DistanceMarker> = emptyList(),
     pois: List<PoiEntity> = emptyList(),
     followGps: Boolean = true,
     state: MapsforgeMapState = remember { MapsforgeMapState() },
@@ -152,6 +154,7 @@ fun MapsforgeMapView(
 
             // Update Polylines
             updatePolyline(view, loadedPolyline, loadedTrackPoints)
+            updateDistanceMarkers(view, distanceMarkers, state.zoomLevel)
             updatePolyline(view, activePolyline, activeTrackPoints)
 
             // Update POIs (only when pois or zoomLevel change)
@@ -203,6 +206,97 @@ private fun createGpsMarker(
     }
     canvas.drawCircle(size / 2, size / 2, radius, paint)
     return Marker(LatLong(0.0, 0.0), bitmap, 0, 0)
+}
+
+private fun updateDistanceMarkers(
+    map: MapView,
+    markers: List<DistanceMarker>,
+    zoomLevel: Int
+) {
+    val layers = map.layerManager.layers
+    
+    // Remove old distance markers
+    val existingMarkers = layers.filterIsInstance<DistanceMarkerOverlay>()
+
+    if (markers.isEmpty()) {
+        if (existingMarkers.isNotEmpty()) {
+            layers.removeAll(existingMarkers)
+            map.layerManager.redrawLayers()
+        }
+        return
+    }
+
+    // Optimization: Check if we need to recreate markers
+    if (existingMarkers.size == markers.size &&
+        existingMarkers.firstOrNull()?.zoomLevel == zoomLevel &&
+        existingMarkers.zip(markers).all { (existing, new) -> 
+            existing.distanceKm == new.distanceKm && 
+            existing.latLong == new.latLong &&
+            existing.isActive == new.isActive
+        }) {
+        return
+    }
+
+    Timber.i("Updating distance markers: ${markers.size} at zoom $zoomLevel")
+    layers.removeAll(existingMarkers)
+
+    // Add new markers
+    markers.forEach { dm ->
+        val marker = createDistanceMarkerOverlay(dm, zoomLevel, map)
+        layers.add(marker)
+    }
+}
+
+private class DistanceMarkerOverlay(
+    latLong: LatLong,
+    bitmap: Bitmap,
+    val distanceKm: Int,
+    val zoomLevel: Int,
+    val isActive: Boolean
+) : Marker(latLong, bitmap, 0, 0)
+
+private fun createDistanceMarkerOverlay(dm: DistanceMarker, zoomLevel: Int, mapView: MapView): DistanceMarkerOverlay {
+    val radius = (zoomLevel * 1.8f).toInt().coerceIn(20, 56)
+    val size = radius * 2 + 12
+    val bitmap = AndroidGraphicFactory.INSTANCE.createBitmap(size, size)
+    val canvas = AndroidGraphicFactory.INSTANCE.createCanvas()
+    canvas.setBitmap(bitmap)
+    
+    val center = size / 2.0f
+    
+    // Outer shadow/border
+    val shadowPaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+        setColor(Color.BLACK)
+        strokeWidth = 1f
+        setStyle(Style.STROKE)
+    }
+    canvas.drawCircle(center.toInt(), center.toInt(), radius + 1, shadowPaint)
+
+    val paint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+        setColor(Color.WHITE)
+        setStyle(Style.FILL)
+    }
+    canvas.drawCircle(center.toInt(), center.toInt(), radius, paint)
+    
+    val borderPaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+        setColor(if (dm.isActive) Color.GREEN else Color.RED)
+        strokeWidth = 2f
+        setStyle(Style.STROKE)
+    }
+    canvas.drawCircle(center.toInt(), center.toInt(), radius, borderPaint)
+    
+    // Draw text (distance number)
+    val textPaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+        setColor(Color.BLACK)
+        setTextSize(radius * 1.1f)
+        setTextAlign(Align.CENTER)
+    }
+    // Baseline adjustment for centering text vertically
+    val textSize = radius * 1.1f
+    val yPos = (center + (textSize / 3f)).toInt()
+    canvas.drawText(dm.distanceKm.toString(), center.toInt(), yPos, textPaint)
+    
+    return DistanceMarkerOverlay(dm.latLong, bitmap, dm.distanceKm, zoomLevel, dm.isActive)
 }
 
 private fun createPolyline(

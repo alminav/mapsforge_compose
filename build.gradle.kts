@@ -14,5 +14,7 @@ configure<org.gradle.plugins.ide.idea.model.IdeaModel> {
         excludeDirs.add(file("backups"))
         excludeDirs.add(file("pictures"))
         excludeDirs.add(file("app/src/main/res/mipmap-hdpi"))
+        excludeDirs.add(file("app/src/main/assets"))
+        excludeDirs.add(file("graphhopper/src/main/assets"))
     }
 }

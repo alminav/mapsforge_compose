@@ -39,6 +39,8 @@ data class MainUiState(
     val themeFile: File? = null,
     val isTrackingActive: Boolean = false,
     val loadedTrackPoints: List<RoutePoint> = emptyList(),
+    val distanceMarkers: List<DistanceMarker> = emptyList(),
+    val activeDistanceMarkers: List<DistanceMarker> = emptyList(),
     val loadedTrackName: String? = null,
     val activeTrackPoints: List<RoutePoint> = emptyList(),
     val pois: List<PoiEntity> = emptyList(),
@@ -59,6 +61,12 @@ data class MainUiState(
     val isAppending: Boolean = false,
     val keepScreenOn: Boolean = false,
     val pendingPoiAddress: String? = null
+)
+
+data class DistanceMarker(
+    val latLong: LatLong,
+    val distanceKm: Int,
+    val isActive: Boolean = false
 )
 
 class MainViewModel(
@@ -108,7 +116,11 @@ class MainViewModel(
         viewModelScope.launch {
             locationFlow.collect {
                 _uiState.update { state ->
-                    state.copy(activeTrackPoints = TrackingService.currentTrackPoints.toList())
+                    val points = TrackingService.currentTrackPoints.toList()
+                    state.copy(
+                        activeTrackPoints = points,
+                        activeDistanceMarkers = calculateDistanceMarkers(points, true)
+                    )
                 }
             }
         }
@@ -431,7 +443,10 @@ class MainViewModel(
     }
 
     fun setLoadedTrackPoints(points: List<RoutePoint>) {
-        _uiState.update { it.copy(loadedTrackPoints = points) }
+        _uiState.update { it.copy(
+            loadedTrackPoints = points,
+            distanceMarkers = calculateDistanceMarkers(points, false)
+        ) }
     }
 
     fun setLoadedTrackName(name: String?) {
@@ -691,6 +706,28 @@ class MainViewModel(
         _uiState.update { it.copy(pendingPoiAddress = address) }
     }
 
+    private fun calculateDistanceMarkers(points: List<RoutePoint>, isActive: Boolean): List<DistanceMarker> {
+        if (points.isEmpty()) return emptyList()
+        val markers = mutableListOf<DistanceMarker>()
+        var totalDistKm = 0.0
+        var lastMilestone = 0
+
+        for (i in 0 until points.size - 1) {
+            val p1 = points[i]
+            val p2 = points[i + 1]
+            totalDistKm += TrackStatsCalculator.calculateDistanceKm(
+                LatLong(p1.latitude, p1.longitude),
+                LatLong(p2.latitude, p2.longitude)
+            )
+            val currentKm = totalDistKm.toInt()
+            if (currentKm > lastMilestone) {
+                markers.add(DistanceMarker(LatLong(p2.latitude, p2.longitude), currentKm, isActive))
+                lastMilestone = currentKm
+            }
+        }
+        return markers
+    }
+
     fun getExternalFilesDir() = externalFilesDir
     
     fun getSettingsRepository() = settingsRepository
@@ -709,6 +746,7 @@ class MainViewModel(
             if (result.success) {
                 setLoadedTrackPoints(result.points)
                 setLoadedTrackName(result.name)
+
             }
         }
     }
