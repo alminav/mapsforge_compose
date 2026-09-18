@@ -60,7 +60,12 @@ data class MainUiState(
     val downloadMessage: String? = null,
     val isAppending: Boolean = false,
     val keepScreenOn: Boolean = false,
-    val pendingPoiAddress: String? = null
+    val pendingPoiAddress: String? = null,
+    val roundtripPending: Boolean = false,
+    val pendingRoundtripStartLat: Double = 0.0,
+    val pendingRoundtripStartLon: Double = 0.0,
+    val pendingRoundtripStopLat: Double = 0.0,
+    val pendingRoundtripStopLon: Double = 0.0
 )
 
 data class DistanceMarker(
@@ -705,6 +710,24 @@ class MainViewModel(
     
     fun setPendingPoiAddress(address: String?) {
         _uiState.update { it.copy(pendingPoiAddress = address) }
+    }
+
+    fun setRoundtripPending(
+        pending: Boolean,
+        startLat: Double = 0.0,
+        startLon: Double = 0.0,
+        stopLat: Double = 0.0,
+        stopLon: Double = 0.0
+    ) {
+        _uiState.update {
+            it.copy(
+                roundtripPending = pending,
+                pendingRoundtripStartLat = startLat,
+                pendingRoundtripStartLon = startLon,
+                pendingRoundtripStopLat = stopLat,
+                pendingRoundtripStopLon = stopLon
+            )
+        }
     }
 
     private fun calculateDistanceMarkers(points: List<RoutePoint>, isActive: Boolean): List<DistanceMarker> {

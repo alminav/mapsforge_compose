@@ -57,6 +57,7 @@ import com.almica.mapsforge_compose.charts.RouteEntity
 import com.almica.mapsforge_compose.charts.SpeedChart
 import com.almica.mapsforge_compose.charts.toKmlString
 import com.almica.mapsforge_compose.gh.GhHelper.Locomotion
+import com.almica.mapsforge_compose.gh.RoundtripValuePickerDialog
 import com.almica.mapsforge_compose.weather.WeatherScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -217,6 +218,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 onCalculateRoundtrip = { sLat, sLon, eLat, eLon ->
                     scope.launch {
                         snackbarHostState.currentSnackbarData?.dismiss()
+                        viewModel.setRoundtripPending(true, sLat, sLon, eLat, eLon)
 
                         val folder = uiState.selectedGraphHopperFolder
                         val locomotionKey = uiState.selectedLocomotionKey
@@ -229,7 +231,6 @@ fun MainScreen(viewModel: MainViewModel) {
                             )
                         }
                     }
-                    viewModel.calculateRoundtrip(context, sLat, sLon, eLat, eLon)
                 }
             )
         },
@@ -326,6 +327,25 @@ fun MainScreen(viewModel: MainViewModel) {
             viewModel.setPendingPoiAddress(address)
         },
     )
+
+    if (uiState.roundtripPending) {
+        RoundtripValuePickerDialog(
+            onDismissRequest = { viewModel.setRoundtripPending(false) },
+            onValueSelected = { factor ->
+                viewModel.setRoundTripFactor(factor)
+                viewModel.setRoundtripPending(false)
+                viewModel.calculateRoundtrip(
+                    context,
+                    uiState.pendingRoundtripStartLat,
+                    uiState.pendingRoundtripStartLon,
+                    uiState.pendingRoundtripStopLat,
+                    uiState.pendingRoundtripStopLon
+                )
+            },
+            initialValue = uiState.roundTripFactor,
+            title = "Roundtrip Factor"
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -34,7 +34,6 @@ import com.almica.mapsforge_compose.externalData.MagentaCloud
 import com.almica.mapsforge_compose.externalData.MagentaCloudDownloader
 import com.almica.mapsforge_compose.gh.Const
 import com.almica.mapsforge_compose.gh.GhHelper
-import com.almica.mapsforge_compose.gh.RoundtripValuePickerDialog
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
@@ -72,11 +71,8 @@ fun SettingsScreen(
     onDownloadMap: (MapRegion) -> Unit = {}
 ) {
     SettingsScreenContent(
-        initialSelectedFileName = selectedMapFileName ?: repository.getSelectedRegion().fileName,
-        initialSelectedHgtFileName = selectedHgtFileName ?: repository.getSelectedHgtFileName(),
         initialSelectedThemeId = repository.getSelectedThemeId(),
         initialAltitudeCorrection = repository.getAltitudeCorrection(),
-        initialRoundtripFactor = repository.getRoundTripFactor(),
         initialFollowGps = repository.getFollowGps(),
         initialKeepScreenOn = repository.getKeepScreenOn(),
         themeFilePath = repository.getThemeFilePath(),
@@ -97,14 +93,12 @@ fun SettingsScreen(
             repository.setKeepScreenOn(it)
             onKeepScreenOnChanged(it)
         },
-        onThemeFileSelected = onThemeFileSelected,
         onThemeSelected = onThemeSelected,
         onGhFolderSelected = onGhFolderSelected,
         onGhFolderDeleted = onGhFolderDeleted,
         onGhZipImported = onGhZipImported,
         onGhFoldersRefresh = onGhFoldersRefresh,
         onLocomotionSelected = onLocomotionSelected,
-        onRoundtripFactorSaved = { repository.setRoundTripFactor(it) },
         onMapFileSelected = {
             repository.setSelectedMapFileName(it)
             onRegionChanged()
@@ -125,8 +119,6 @@ fun SettingsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreenContent(
-    initialSelectedFileName: String?,
-    initialSelectedHgtFileName: String?,
     initialSelectedThemeId: String,
     initialAltitudeCorrection: Float,
     initialFollowGps: Boolean,
@@ -143,15 +135,12 @@ fun SettingsScreenContent(
     onAltitudeCorrectionSaved: (Float) -> Unit,
     onFollowGpsToggled: (Boolean) -> Unit,
     onKeepScreenOnToggled: (Boolean) -> Unit,
-    onThemeFileSelected: (Uri) -> Unit,
     onThemeSelected: (String) -> Unit,
     onGhFolderSelected: (String) -> Unit,
     onGhFolderDeleted: (String) -> Unit,
     onGhZipImported: (Uri) -> Unit,
     onGhFoldersRefresh: () -> Unit,
     onLocomotionSelected: (String) -> Unit,
-    initialRoundtripFactor: Float,
-    onRoundtripFactorSaved: (Float) -> Unit,
     onMapFileSelected: (String?) -> Unit,
     onMapFileDeleted: (String) -> Unit,
     onMapImported: (Uri) -> Unit,
@@ -230,11 +219,9 @@ fun SettingsScreenContent(
     var selectedGhFolderId by remember { mutableStateOf(selectedGhFolder) }
     var locomotionKey by remember { mutableStateOf(selectedLocomotionKey) }
     var altitudeCorrection by remember { mutableStateOf(initialAltitudeCorrection) }
-    var roundtripFactor by remember { mutableStateOf(initialRoundtripFactor) }
     var followGps by remember { mutableStateOf(initialFollowGps) }
     var keepScreenOn by remember { mutableStateOf(initialKeepScreenOn) }
     var showAltitudeDialog by remember { mutableStateOf(false) }
-    var showRoundtripDialog by remember { mutableStateOf(false) }
     var showMapSelectionDialog by remember { mutableStateOf(false) }
     var showHgtSelectionDialog by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
@@ -341,20 +328,6 @@ fun SettingsScreenContent(
             context.startActivity(intent)
             showWebViewMapsforge = false
         }
-    }
-
-    if (showRoundtripDialog) {
-        RoundtripValuePickerDialog(
-            initialValue = roundtripFactor,
-            onDismissRequest = { showRoundtripDialog = false },
-            onValueSelected = {
-                Timber.i("Selected roundtrip factor: $it")
-                showRoundtripDialog = false
-                roundtripFactor = it
-                onRoundtripFactorSaved(it)
-            },
-            title = stringResource(R.string.roundtrip_factor)
-        )
     }
 
     if (showAltitudeDialog) {
@@ -494,8 +467,6 @@ fun SettingsScreenContent(
                 })
 
                 2 -> RoutingSettingsTab(
-                    roundtripFactor = roundtripFactor,
-                    onRoundtripClick = { showRoundtripDialog = true },
                     locomotionKey = locomotionKey,
                     onLocomotionSelected = {
                         locomotionKey = it
@@ -856,8 +827,6 @@ fun MapSettingsTab(
 
 @Composable
 fun RoutingSettingsTab(
-    roundtripFactor: Float,
-    onRoundtripClick: () -> Unit,
     locomotionKey: String,
     onLocomotionSelected: (String) -> Unit,
     ghFolders: List<String>,
@@ -912,26 +881,6 @@ fun RoutingSettingsTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onRoundtripClick() },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "Roundtrip Faktor", style = MaterialTheme.typography.bodyLarge)
-                        Text(text = "Aktueller Wert: $roundtripFactor", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        }
-
         item { Spacer(modifier = Modifier.height(8.dp)) }
 
         item {
@@ -1346,11 +1295,8 @@ fun HgtSelectionDialog(
 @Composable
 fun SettingsScreenPreview() {
     SettingsScreenContent(
-        initialSelectedFileName = "world.map",
-        initialSelectedHgtFileName = "N52E010.hgt",
         initialSelectedThemeId = "cruiser",
         initialAltitudeCorrection = -48.0f,
-        initialRoundtripFactor = 0.5f,
         initialFollowGps = true,
         initialKeepScreenOn = false,
         themeFilePath = null,
@@ -1372,14 +1318,12 @@ fun SettingsScreenPreview() {
         onAltitudeCorrectionSaved = {},
         onFollowGpsToggled = {},
         onKeepScreenOnToggled = {},
-        onThemeFileSelected = {},
         onThemeSelected = {},
         onGhFolderSelected = {},
         onGhFolderDeleted = {},
         onGhZipImported = {},
         onGhFoldersRefresh = {},
         onLocomotionSelected = {},
-        onRoundtripFactorSaved = {},
         onMapFileSelected = {},
         onMapFileDeleted = {},
         onMapImported = {},
