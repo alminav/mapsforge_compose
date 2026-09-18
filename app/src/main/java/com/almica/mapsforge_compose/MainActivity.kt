@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
             val uiState by viewModel.uiState.collectAsState()
             
             LaunchedEffect(uiState.keepScreenOn) {
+                Timber.i("Setting keep screen on: ${uiState.keepScreenOn}")
                 if (uiState.keepScreenOn) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 } else {

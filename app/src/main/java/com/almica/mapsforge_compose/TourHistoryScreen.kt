@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import android.content.Context
+import android.content.Intent
 import android.hardware.Sensor
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -53,6 +54,7 @@ import androidx.compose.material.icons.filled.Speed
 import com.almica.mapsforge_compose.TourUtils.refreshRouteElevationFromSrtm
 import timber.log.Timber
 import androidx.compose.ui.platform.LocalLocale
+import androidx.core.net.toUri
 
 enum class TourSortOption {
     DATE_DESC, NAME_ASC, DISTANCE_DESC, DISTANCE_ASC, PROXIMITY_ASC
@@ -217,7 +219,15 @@ fun TourHistoryScreen(
     )
 
     var showImportMenu by remember { mutableStateOf(false) }
-
+    var showMagentaCloudRoutes by remember { mutableStateOf(false) }
+    if (showMagentaCloudRoutes) {
+        LaunchedEffect(Unit) {
+            val url = "https://magentacloud.de/s/THHLHbYtC9AZzSz"
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+            context.startActivity(intent)
+            showMagentaCloudRoutes = false
+        }
+    }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
@@ -243,6 +253,13 @@ fun TourHistoryScreen(
                         onClick = {
                             showImportMenu = false
                             importGpxLauncher.launch(arrayOf("application/gpx+xml", "application/xml", "text/xml", "*/*"))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Magenta Cloud") },
+                        onClick = {
+                            showImportMenu = false
+                            showMagentaCloudRoutes = true
                         }
                     )
                 }

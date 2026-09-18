@@ -13,7 +13,7 @@ import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.rendertheme.ExternalRenderTheme
-import org.mapsforge.map.rendertheme.InternalRenderTheme
+//import org.mapsforge.map.rendertheme.InternalRenderTheme
 import androidx.compose.ui.platform.LocalContext
 import com.almica.mapsforge_compose.gh.Const
 import org.mapsforge.core.graphics.Align
@@ -181,8 +181,12 @@ private fun applyTheme(layer: TileRendererLayer, themeFile: File?) {
         val theme = if (themeFile?.exists() == true) {
             ExternalRenderTheme(themeFile)
         } else {
-            InternalRenderTheme.DEFAULT
+            null
         }
+// mapsforgeThemes = "0.25.0"
+//        else {
+//            InternalRenderTheme.DEFAULT
+//        }
         
         // Mapsforge InternalRenderTheme.DEFAULT is a singleton, 
         // setXmlRenderTheme handles the check usually, but we can be explicit if needed.

@@ -414,6 +414,7 @@ class MainViewModel(
     }
 
     fun setKeepScreenOn(enabled: Boolean) {
+        Timber.d("setKeepScreenOn: $enabled")
         settingsRepository.setKeepScreenOn(enabled)
         _uiState.update { it.copy(keepScreenOn = enabled) }
     }
@@ -438,7 +439,7 @@ class MainViewModel(
                 settingsRepository.setLastLongitude(it.longitude)
             }
             settingsRepository.setLastZoom(state.zoomLevel)
-            Timber.d("Persisted map position and zoom")
+            //Timber.d("Persisted map position and zoom")
         }
     }
 
