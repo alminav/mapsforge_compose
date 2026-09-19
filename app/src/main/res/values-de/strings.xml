@@ -33,6 +33,11 @@
     <string name="download_success">Download erfolgreich: %1$s</string>
     <string name="download_failed">Download fehlgeschlagen.</string>
     <string name="processing_failed">Verarbeitung fehlgeschlagen.</string>
+
+    <string name="magenta_cloud">Magenta Cloud</string>
+    <string name="mapsforge_server">Mapsforge Server</string>
+    <string name="openandromaps">OpenAndroMaps</string>
+
     <string-array name="wind_directions">
         <item>N</item>
         <item>NNO</item>

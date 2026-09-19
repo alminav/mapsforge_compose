@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.almica.mapsforge_compose.externalData.MagentaCloud
@@ -226,6 +227,7 @@ fun SettingsScreenContent(
     var showHgtSelectionDialog by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
     var showWebViewMapsforge by remember { mutableStateOf(false) }
+    var showWebViewOpenAndroMaps by remember { mutableStateOf(false) }
     var showWebViewMagentaCloudMaps by remember { mutableStateOf(false) }
     var showWebViewMagentaCloudGh by remember { mutableStateOf(false) }
     var showWebViewMagentaCloudHgt by remember { mutableStateOf(false) }
@@ -294,6 +296,14 @@ fun SettingsScreenContent(
         )
     }
 
+    if (showWebViewOpenAndroMaps) {
+        LaunchedEffect(Unit) {
+            val url = "https://www.openandromaps.org/downloads"
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+            context.startActivity(intent)
+            showWebViewMapsforge = false
+        }
+    }
     if (showWebViewMapsforge) {
         LaunchedEffect(Unit) {
             val url = "https://download.mapsforge.org"
@@ -454,6 +464,7 @@ fun SettingsScreenContent(
                     onMapSelectionClick = { showMapSelectionDialog = true },
                     onMapFileReset = { onMapFileSelected(null) },
                     onMapsforgeDownload = { showDownloadDialog = true },
+                    onOpenAndroMapsDownload = {showWebViewOpenAndroMaps = true },
                     webMagentaCloudMaps = { showWebViewMagentaCloudMaps = true },
                     selectedThemeId = selectedThemeId,
                     themeFilePath = themeFilePath,
@@ -639,7 +650,12 @@ fun GeneralSettingsTab(
                     tint = Color.Unspecified,
                     modifier = Modifier.size(48.dp).padding(end = 8.dp)
                 )
-                Text("Magenta Cloud")
+                Text(
+                    text = stringResource(R.string.magenta_cloud),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
 
@@ -678,6 +694,7 @@ fun MapSettingsTab(
     themeFilePath: String?,
     onThemeSelected: (String) -> Unit,
     onMapsforgeDownloadClick: (String, String) -> Unit,
+    onOpenAndroMapsDownload: () -> Unit,
     webMagentaCloudMaps: () -> Unit
 ) {
     val mapsItems by remember(mapFiles) {
@@ -785,18 +802,42 @@ fun MapSettingsTab(
                         painter = painterResource(id = R.mipmap.magenta_cloud),
                         contentDescription = null,
                         tint = Color.Unspecified,
-                        modifier = Modifier.size(48.dp).padding(end = 8.dp)
+                        modifier = Modifier.size(40.dp).padding(end = 4.dp)
                     )
-                    Text("Magenta Cloud")
+                    Text(
+                        text = stringResource(R.string.magenta_cloud),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
                 TextButton(modifier = Modifier.weight(0.5f), onClick = { onMapsforgeDownload() }) {
                     Icon(
                         painter = painterResource(id = R.mipmap.mapsforge),
                         contentDescription = null,
                         tint = Color.Unspecified,
-                        modifier = Modifier.size(48.dp).padding(end = 8.dp)
+                        modifier = Modifier.size(40.dp).padding(end = 4.dp)
                     )
-                    Text("Mapsforge Server")
+                    Text(
+                        text = stringResource(R.string.mapsforge_server),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                TextButton(modifier = Modifier.weight(0.5f), onClick = { onOpenAndroMapsDownload() }) {
+                    Icon(
+                        painter = painterResource(id = R.mipmap.mapsforge),
+                        contentDescription = null,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(40.dp).padding(end = 4.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.openandromaps),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -1009,7 +1050,12 @@ fun RoutingSettingsTab(
                     tint = Color.Unspecified,
                     modifier = Modifier.size(48.dp).padding(end = 8.dp)
                 )
-                Text("Magenta Cloud")
+                Text(
+                    text = stringResource(R.string.magenta_cloud),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
 

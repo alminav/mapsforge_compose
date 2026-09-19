@@ -3,6 +3,7 @@ package com.almica.mapsforge_compose
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
@@ -17,6 +18,7 @@ object ThemeDownloader {
      * @param targetDir The directory where the theme should be stored.
      */
     suspend fun extractThemesIfMissing(context: Context, targetDir: File) {
+        Timber.i("Extracting themes if missing: ${targetDir.absolutePath}")
         if (targetDir.exists() && targetDir.list()?.isNotEmpty() == true) return
 
         withContext(Dispatchers.IO) {

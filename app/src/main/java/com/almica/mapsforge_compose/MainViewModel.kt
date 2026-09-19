@@ -65,7 +65,8 @@ data class MainUiState(
     val pendingRoundtripStartLat: Double = 0.0,
     val pendingRoundtripStartLon: Double = 0.0,
     val pendingRoundtripStopLat: Double = 0.0,
-    val pendingRoundtripStopLon: Double = 0.0
+    val pendingRoundtripStopLon: Double = 0.0,
+    val pendingRoundtripVehicle: GhHelper.Locomotion? = null
 )
 
 data class DistanceMarker(
@@ -203,7 +204,9 @@ class MainViewModel(
                     _uiState.update { it.copy(downloadProgress = progress) }
                 }
                 
-                themeDir?.let { ThemeDownloader.extractThemesIfMissing(getApplication(), it) }
+                themeDir?.let { ThemeDownloader.extractThemesIfMissing(getApplication(), it) } ?: run {
+                    ThemeDownloader.extractThemesIfMissing(getApplication(), File(externalFilesDir, "themes"))
+                }
                 val downloadedTheme = getThemeFile()
                 Timber.i("Theme file exists: ${downloadedTheme?.path}")
 
@@ -717,7 +720,8 @@ class MainViewModel(
         startLat: Double = 0.0,
         startLon: Double = 0.0,
         stopLat: Double = 0.0,
-        stopLon: Double = 0.0
+        stopLon: Double = 0.0,
+        vehicle: GhHelper.Locomotion? = null
     ) {
         _uiState.update {
             it.copy(
@@ -725,7 +729,8 @@ class MainViewModel(
                 pendingRoundtripStartLat = startLat,
                 pendingRoundtripStartLon = startLon,
                 pendingRoundtripStopLat = stopLat,
-                pendingRoundtripStopLon = stopLon
+                pendingRoundtripStopLon = stopLon,
+                pendingRoundtripVehicle = vehicle
             )
         }
     }
@@ -765,7 +770,7 @@ class MainViewModel(
     }
 
     fun getSettingsRepository() = settingsRepository
-    fun calculateRoute(context: Context, startLat: Double, startLon: Double, stopLat: Double, stopLon: Double) {
+    fun calculateRoute(context: Context, startLat: Double, startLon: Double, stopLat: Double, stopLon: Double, vehicle: GhHelper.Locomotion? = null) {
         val folderName = settingsRepository.getGraphHopperFolder() ?: "n52e0103d"
         val ghFolder = ghRootDir?.resolve(folderName)
         viewModelScope.launch {
@@ -784,7 +789,7 @@ class MainViewModel(
             }
         }
     }
-    fun calculateRoundtrip(context: Context, startLat: Double, startLon: Double, stopLat: Double, stopLon: Double) {
+    fun calculateRoundtrip(context: Context, startLat: Double, startLon: Double, stopLat: Double, stopLon: Double, vehicle: GhHelper.Locomotion? = null) {
         val folderName = settingsRepository.getGraphHopperFolder() ?: "n52e0103d"
         val ghFolder = ghRootDir?.resolve(folderName)
         viewModelScope.launch {

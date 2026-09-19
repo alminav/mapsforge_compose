@@ -95,6 +95,10 @@
     <string name="download_failed">Download failed.</string>
     <string name="processing_failed">Processing failed.</string>
 
+    <string name="magenta_cloud">Magenta Cloud</string>
+    <string name="mapsforge_server">Mapsforge Server</string>
+    <string name="openandromaps">OpenAndroMaps</string>
+
     <!-- Weather -->
     <string name="weather_clear">Clear</string>
     <string name="weather_partly_cloudy_desc">Partly cloudy</string>
@@ -107,7 +111,7 @@
     <string name="weather_thunderstorm">Thunderstorm</string>
     <string name="weather_unknown">Unknown</string>
 
-    <string name="poi_dialog_title">Saved POIs</string>
+    <string name="poi_dialog_title">POIs</string>
     <string name="poi_sort_name">Name</string>
     <string name="poi_sort_distance">Distance</string>
     <string name="poi_list_empty">No POIs saved.</string>

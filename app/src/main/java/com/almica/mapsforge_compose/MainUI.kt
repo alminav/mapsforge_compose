@@ -339,7 +339,8 @@ fun MainScreen(viewModel: MainViewModel) {
                     uiState.pendingRoundtripStartLat,
                     uiState.pendingRoundtripStartLon,
                     uiState.pendingRoundtripStopLat,
-                    uiState.pendingRoundtripStopLon
+                    uiState.pendingRoundtripStopLon,
+                    uiState.pendingRoundtripVehicle
                 )
             },
             initialValue = uiState.roundTripFactor,
@@ -775,6 +776,7 @@ fun MapControls(
     onShowActiveSpeedChart: () -> Unit,
     onSearchClick: () -> Unit
 ) {
+    val mainViewModel: MainViewModel = viewModel()
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -847,16 +849,18 @@ fun MapControls(
             onDismiss = { showPoiListDialog = false },
             onPoiClick = onPoiClick,
             onDeletePoi = onDeletePoi,
-            onCalculateRoute = { lat, lon ->
+            onCalculateRoute = { lat, lon, vehicle ->
                 (currentLocation?.let { LatLong(it.latitude, it.longitude) }
                     ?: mapCenter)?.let { start ->
+                    mainViewModel.selectLocomotion(vehicle.key)
                     onCalculateRoute(start.latitude, start.longitude, lat, lon)
                     showPoiListDialog = false
                 }
             },
-            onCalculateRoundtrip = { lat, lon ->
+            onCalculateRoundtrip = { lat, lon, vehicle ->
                 (currentLocation?.let { LatLong(it.latitude, it.longitude) }
                     ?: mapCenter)?.let { start ->
+                    mainViewModel.selectLocomotion(vehicle.key)
                     onCalculateRoundtrip(start.latitude, start.longitude, lat, lon)
                     showPoiListDialog = false
                 }

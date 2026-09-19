@@ -1,10 +1,22 @@
 package com.almica.mapsforge_compose
 
 import android.location.Location
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Check
@@ -13,8 +25,19 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.TripOrigin
-import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,17 +45,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import java.util.Locale
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.almica.mapsforge_compose.charts.Const
 import com.almica.mapsforge_compose.charts.RamaniTheme
 import com.almica.mapsforge_compose.charts.format
-import com.almica.mapsforge_compose.charts.formatDistM
+import com.almica.mapsforge_compose.gh.GhHelper
 import timber.log.Timber
+import java.util.Locale
 import kotlin.math.sqrt
 
 enum class PoiSortOrder { NAME, DISTANCE }
@@ -43,8 +68,8 @@ fun PoiListDialog(
     onDismiss: () -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onDeletePoi: (PoiEntity) -> Unit,
-    onCalculateRoute: (Double, Double) -> Unit,
-    onCalculateRoundtrip: (Double, Double) -> Unit,
+    onCalculateRoute: (Double, Double, GhHelper.Locomotion) -> Unit,
+    onCalculateRoundtrip: (Double, Double, GhHelper.Locomotion) -> Unit,
     mapLocation: RoutePoint?,
     onShowWeather: (PoiEntity) -> Unit
 ) {
@@ -152,8 +177,8 @@ private fun PoiListContent(
     onPoiClick: (PoiEntity) -> Unit,
     onDismiss: () -> Unit,
     onDeletePoi: (PoiEntity) -> Unit,
-    onCalculateRoute: (Double, Double) -> Unit,
-    onCalculateRoundtrip: (Double, Double) -> Unit,
+    onCalculateRoute: (Double, Double, GhHelper.Locomotion) -> Unit,
+    onCalculateRoundtrip: (Double, Double, GhHelper.Locomotion) -> Unit,
     onShowWeather: (PoiEntity) -> Unit,
     isPreview: Boolean
 ) {
@@ -200,6 +225,14 @@ private fun PoiListContent(
         if (sortedPois.isEmpty()) {
             Text(stringResource(R.string.poi_list_empty))
         } else {
+            val context = LocalContext.current
+            val initialVehicleIndex = remember(context) {
+                val currentKey = SettingsRepository(context).getLocomotionKey()
+                GhHelper.Locomotion.entries.indexOfFirst {
+                    it.key.equals(currentKey, ignoreCase = true)
+                }.coerceAtLeast(0)
+            }
+            var selectedVehicleIndex by remember { mutableStateOf(initialVehicleIndex) }
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)
             ) {
@@ -211,9 +244,11 @@ private fun PoiListContent(
                             onDismiss()
                         },
                         onDelete = { onDeletePoi(poi) },
-                        onCalculate = { onCalculateRoute(poi.latitude, poi.longitude) },
-                        onRoundtrip = {
-                            onCalculateRoundtrip(poi.latitude, poi.longitude)
+                        onCalculate = { vehicle ->
+                            onCalculateRoute(poi.latitude, poi.longitude, vehicle)
+                        },
+                        onRoundtrip = { vehicle ->
+                            onCalculateRoundtrip(poi.latitude, poi.longitude, vehicle)
                         },
                         distance = mapLocation?.let {
                             if (isPreview) {
@@ -233,7 +268,9 @@ private fun PoiListContent(
                         }, onShowWeather = {
                             Timber.i("Showing weather for ${poi.label} at ${poi.latitude}, ${poi.longitude}")
                             onShowWeather(poi)
-                        }
+                        },
+                        selectedIndex = selectedVehicleIndex,
+                        onIndexChange = { selectedVehicleIndex = it }
                     )
                 }
             }
@@ -246,11 +283,28 @@ fun PoiListItem(
     poi: PoiEntity,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    onCalculate: () -> Unit,
-    onRoundtrip: () -> Unit,
+    onCalculate: (GhHelper.Locomotion) -> Unit,
+    onRoundtrip: (GhHelper.Locomotion) -> Unit,
     onShowWeather: () -> Unit,
+    selectedIndex: Int,
+    onIndexChange: (Int) -> Unit,
     distance: Float? = null
 ) {
+    val vehicles = GhHelper.Locomotion.entries
+    val localPagerState = rememberPagerState(initialPage = selectedIndex, pageCount = { vehicles.size })
+
+    LaunchedEffect(selectedIndex) {
+        if (localPagerState.currentPage != selectedIndex) {
+            localPagerState.scrollToPage(selectedIndex)
+        }
+    }
+
+    LaunchedEffect(localPagerState.currentPage) {
+        if (localPagerState.currentPage != selectedIndex) {
+            onIndexChange(localPagerState.currentPage)
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -299,9 +353,29 @@ fun PoiListItem(
         }
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 40.dp),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onCalculate) {
+            Box(
+                modifier = Modifier
+                    .width(48.dp)
+                    .height(48.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                HorizontalPager(
+                    state = localPagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    Icon(
+                        painter = painterResource(id = vehicles[page].iconRes),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            IconButton(onClick = { onCalculate(vehicles[selectedIndex]) }) {
                 Icon(
                     imageVector = Icons.Default.Navigation,
                     contentDescription = stringResource(R.string.poi_action_navigate),
@@ -309,7 +383,7 @@ fun PoiListItem(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(onClick = onRoundtrip) {
+            IconButton(onClick = { onRoundtrip(vehicles[selectedIndex]) }) {
                 Icon(
                     imageVector = Icons.Default.TripOrigin,
                     contentDescription = stringResource(R.string.poi_action_roundtrip),
@@ -354,8 +428,8 @@ fun PoiListDialogPreview() {
             onDismiss = {},
             onPoiClick = {},
             onDeletePoi = {},
-            onCalculateRoute = { _, _ -> },
-            onCalculateRoundtrip = { _, _ -> },
+            onCalculateRoute = { _, _, _ -> },
+            onCalculateRoundtrip = { _, _, _ -> },
             onShowWeather = { _ -> },
             mapLocation = sampleLocation,
         )
@@ -372,6 +446,7 @@ fun PoiListItemPreview() {
         longitude = 13.4050
     )
 
+    var selectedIndex by remember { mutableStateOf(0) }
     RamaniTheme {
         PoiListItem(
             poi = samplePoi,
@@ -380,6 +455,8 @@ fun PoiListItemPreview() {
             onCalculate = {},
             onRoundtrip = {},
             onShowWeather = {},
+            selectedIndex = selectedIndex,
+            onIndexChange = { selectedIndex = it },
             distance = 1200f
         )
     }

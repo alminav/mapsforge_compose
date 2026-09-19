@@ -32,6 +32,7 @@ data class RenderTheme(
 object RenderThemes {
     val AVAILABLE_THEMES = listOf(
         RenderTheme("cruiser", "Cruiser", "cruiser/default.xml"),
+        RenderTheme("elevation", "Elevation", "elevate52/Elevate.xml"),
         RenderTheme("mapsforge", "Mapsforge", "mapsforge/osmarender.xml"),
         RenderTheme("outdooractive", "OutdoorActive", "outdooractive/outdooractive.xml"),
         RenderTheme("contrast", "Contrast", "render_contrast/render.xml"),
@@ -47,6 +48,7 @@ data class RenderPreview(
 object RenderPreviews {
     val AVAILABLE_PREVIEWS = listOf(
         RenderPreview("cruiser", R.mipmap.screenshot_cruiser),
+        RenderPreview("elevation", R.mipmap.screenshot_elevation),
         RenderPreview("mapsforge", R.mipmap.screenshot_mapsforge),
         RenderPreview("outdooractive", R.mipmap.screenshot_outdooractive),
         RenderPreview("contrast", R.mipmap.screenshot_contrast),
@@ -132,6 +134,7 @@ class SettingsRepository(context: Context) {
     }
 
     fun setLocomotionKey(key: String) {
+        Timber.i("Set locomotion key: $key")
         defaultPrefs.edit { putString(locomotionKeyString, key) }
     }
 
