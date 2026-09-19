@@ -154,7 +154,7 @@ fun SettingsScreenContent(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val resources = LocalResources.current
-    val downloader: MagentaCloudDownloader = remember { MagentaCloudDownloader(context) }
+    val downloader: MagentaCloudDownloader = remember { MagentaCloudDownloader() }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadMessage by remember { mutableStateOf<String?>(null) }
 

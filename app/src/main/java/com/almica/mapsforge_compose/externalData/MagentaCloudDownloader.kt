@@ -1,14 +1,11 @@
 package com.almica.mapsforge_compose.externalData
 
-import android.content.Context
-import androidx.lifecycle.viewModelScope
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -16,7 +13,7 @@ import java.io.File
 /**
  * 28aug2026 direct download from magenta cloud
  */
-class MagentaCloudDownloader(private val context: Context) {
+class MagentaCloudDownloader {
 
     // Ktor Client initialisieren
     private val client = HttpClient(Android) {

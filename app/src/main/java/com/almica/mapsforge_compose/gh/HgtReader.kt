@@ -178,7 +178,7 @@ class HgtReader(private val context: Context, private var hgtFile: File?) {
 
         if (withDownload && remoteHgtFiles.isNotEmpty()) {
             Timber.i("Downloading missing files: $remoteHgtFiles")
-            val downloader = MagentaCloudDownloader(context)
+            val downloader = MagentaCloudDownloader()
             CoroutineScope(Dispatchers.IO).launch {
                 remoteHgtFiles.forEach { fileName ->
                     val remotePath = MagentaCloud.hgt[fileName]
