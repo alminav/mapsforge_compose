@@ -1,26 +1,26 @@
 package com.almica.mapsforge_compose
 
+//import org.mapsforge.map.rendertheme.InternalRenderTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import com.almica.mapsforge_compose.gh.Const
+import org.mapsforge.core.graphics.Align
+import org.mapsforge.core.graphics.Bitmap
 import org.mapsforge.core.graphics.Color
+import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
+import org.mapsforge.map.datastore.MultiMapDataStore
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
-import org.mapsforge.map.rendertheme.ExternalRenderTheme
-//import org.mapsforge.map.rendertheme.InternalRenderTheme
-import androidx.compose.ui.platform.LocalContext
-import com.almica.mapsforge_compose.gh.Const
-import org.mapsforge.core.graphics.Align
-import org.mapsforge.core.graphics.Bitmap
-import org.mapsforge.core.graphics.Style
-import org.mapsforge.map.datastore.MultiMapDataStore
 import org.mapsforge.map.reader.MapFile
+import org.mapsforge.map.rendertheme.ExternalRenderTheme
 import timber.log.Timber
 import java.io.File
 
@@ -109,7 +109,12 @@ fun MapsforgeMapView(
                         
                         applyTheme(trl, themeXmlFile)
                         layerManager.layers.add(trl)
-                        
+
+                        // 2. Erstelle und füge das Lat/Long Gitter hinzu
+                        val gridLayer: LatLngGridLayer = LatLngGridLayer()
+                        if (SettingsRepository(context).getLatLngGrid())
+                            layerManager.layers.add(gridLayer)
+
                         // Apply initial state or center on map file/GPS
                         model.mapViewPosition.setZoomLevel(state.zoomLevel.toByte())
                         

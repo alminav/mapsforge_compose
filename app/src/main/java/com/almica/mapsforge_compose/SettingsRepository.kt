@@ -177,4 +177,12 @@ class SettingsRepository(context: Context) {
     fun setKeepScreenOn(enabled: Boolean) {
         sharedPreferences.edit { putBoolean("keep_screen_on", enabled) }
     }
+
+    fun getLatLngGrid(): Boolean {
+        return sharedPreferences.getBoolean("lat_lng_grid", false)
+    }
+
+    fun setLatLngGrid(enabled: Boolean) {
+        sharedPreferences.edit { putBoolean("lat_lng_grid", enabled) }
+    }
 }

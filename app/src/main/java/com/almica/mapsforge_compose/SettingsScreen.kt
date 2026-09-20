@@ -49,6 +49,7 @@ fun SettingsScreen(
     onRegionChanged: () -> Unit,
     onFollowGpsChanged: (Boolean) -> Unit = {},
     onKeepScreenOnChanged: (Boolean) -> Unit = {},
+    onLatLngGridChanged: (Boolean) -> Unit = {},
     onThemeFileSelected: (Uri) -> Unit = {},
     onThemeSelected: (String) -> Unit = {},
     ghFolders: List<String> = emptyList(),
@@ -76,6 +77,7 @@ fun SettingsScreen(
         initialAltitudeCorrection = repository.getAltitudeCorrection(),
         initialFollowGps = repository.getFollowGps(),
         initialKeepScreenOn = repository.getKeepScreenOn(),
+        initialLatLngGrid = repository.getLatLngGrid(),
         themeFilePath = repository.getThemeFilePath(),
         ghFolders = ghFolders,
         selectedGhFolder = selectedGhFolder,
@@ -93,6 +95,10 @@ fun SettingsScreen(
         onKeepScreenOnToggled = {
             repository.setKeepScreenOn(it)
             onKeepScreenOnChanged(it)
+        },
+        onLatLngGridToggled = {
+            repository.setLatLngGrid(it)
+            onLatLngGridChanged(it)
         },
         onThemeSelected = onThemeSelected,
         onGhFolderSelected = onGhFolderSelected,
@@ -124,6 +130,7 @@ fun SettingsScreenContent(
     initialAltitudeCorrection: Float,
     initialFollowGps: Boolean,
     initialKeepScreenOn: Boolean,
+    initialLatLngGrid: Boolean,
     themeFilePath: String?,
     ghFolders: List<String>,
     selectedGhFolder: String?,
@@ -136,6 +143,7 @@ fun SettingsScreenContent(
     onAltitudeCorrectionSaved: (Float) -> Unit,
     onFollowGpsToggled: (Boolean) -> Unit,
     onKeepScreenOnToggled: (Boolean) -> Unit,
+    onLatLngGridToggled: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
     onGhFolderSelected: (String) -> Unit,
     onGhFolderDeleted: (String) -> Unit,
@@ -222,6 +230,7 @@ fun SettingsScreenContent(
     var altitudeCorrection by remember { mutableStateOf(initialAltitudeCorrection) }
     var followGps by remember { mutableStateOf(initialFollowGps) }
     var keepScreenOn by remember { mutableStateOf(initialKeepScreenOn) }
+    var latLngGrid by remember { mutableStateOf(initialLatLngGrid) }
     var showAltitudeDialog by remember { mutableStateOf(false) }
     var showMapSelectionDialog by remember { mutableStateOf(false) }
     var showHgtSelectionDialog by remember { mutableStateOf(false) }
@@ -447,6 +456,11 @@ fun SettingsScreenContent(
                         onKeepScreenOnToggled(it)
                         keepScreenOn = it
                     },
+                    latLngGrid = latLngGrid,
+                    onLatLngGridToggled = {
+                        onLatLngGridToggled(it)
+                        latLngGrid = it
+                    },
                     selectedHgtFileName = selectedHgtFileName,
                     onHgtSelectionClick = { showHgtSelectionDialog = true },
                     onHgtFileReset = { onHgtFileSelected(null) },
@@ -509,6 +523,8 @@ fun GeneralSettingsTab(
     onFollowGpsToggled: (Boolean) -> Unit,
     keepScreenOn: Boolean,
     onKeepScreenOnToggled: (Boolean) -> Unit,
+    latLngGrid: Boolean,
+    onLatLngGridToggled: (Boolean) -> Unit,
     selectedHgtFileName: String?,
     onHgtSelectionClick: () -> Unit,
     onHgtFileReset: () -> Unit,
@@ -608,6 +624,32 @@ fun GeneralSettingsTab(
                     Switch(
                         checked = keepScreenOn,
                         onCheckedChange = onKeepScreenOnToggled
+                    )
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Gitterlinien anzeigen", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "Zeigt ein Koordinatengitter (Breiten-/Längengrade) auf der Karte an.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = latLngGrid,
+                        onCheckedChange = onLatLngGridToggled
                     )
                 }
             }
@@ -1345,6 +1387,7 @@ fun SettingsScreenPreview() {
         initialAltitudeCorrection = -48.0f,
         initialFollowGps = true,
         initialKeepScreenOn = false,
+        initialLatLngGrid = true,
         themeFilePath = null,
         ghFolders = listOf(
             "germany_hamburg",
@@ -1364,6 +1407,7 @@ fun SettingsScreenPreview() {
         onAltitudeCorrectionSaved = {},
         onFollowGpsToggled = {},
         onKeepScreenOnToggled = {},
+        onLatLngGridToggled = {},
         onThemeSelected = {},
         onGhFolderSelected = {},
         onGhFolderDeleted = {},
