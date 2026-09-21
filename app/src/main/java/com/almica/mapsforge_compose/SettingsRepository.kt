@@ -147,18 +147,24 @@ class SettingsRepository(context: Context) {
     }
 
     fun getLastLatitude(): Double {
-        return sharedPreferences.getFloat("last_latitude", 0.0f).toDouble()
+        val lastLatitude = sharedPreferences.getFloat("last_latitude", 0.0f).toDouble()
+        Timber.i("Last latitude: $lastLatitude")
+        return lastLatitude
     }
 
     fun setLastLatitude(lat: Double) {
+        Timber.i("set last latitude: $lat")
         sharedPreferences.edit { putFloat("last_latitude", lat.toFloat()) }
     }
 
     fun getLastLongitude(): Double {
-        return sharedPreferences.getFloat("last_longitude", 0.0f).toDouble()
+        val lastLongitude = sharedPreferences.getFloat("last_longitude", 0.0f).toDouble()
+        Timber.i("Last longitude: $lastLongitude")
+        return lastLongitude
     }
 
     fun setLastLongitude(lon: Double) {
+        Timber.i("set last longitude: $lon")
         sharedPreferences.edit { putFloat("last_longitude", lon.toFloat()) }
     }
 

@@ -1,11 +1,14 @@
 package com.almica.mapsforge_compose
 
 //import org.mapsforge.map.rendertheme.InternalRenderTheme
+import android.view.MotionEvent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
+import com.almica.mapsforge_compose.charts.RamaniTheme
 import com.almica.mapsforge_compose.gh.Const
 import org.mapsforge.core.graphics.Align
 import org.mapsforge.core.graphics.Bitmap
@@ -16,6 +19,8 @@ import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.datastore.MultiMapDataStore
+import org.mapsforge.map.layer.download.TileDownloadLayer
+import org.mapsforge.map.layer.download.tilesource.OnlineTileSource
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
@@ -23,6 +28,7 @@ import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.ExternalRenderTheme
 import timber.log.Timber
 import java.io.File
+
 
 @Stable
 class MapsforgeMapState(
@@ -48,12 +54,18 @@ fun MapsforgeMapView(
     onMapViewReady: (MapView) -> Unit = {},
     onCenterChanged: (LatLong) -> Unit = {},
     onZoomChanged: (Int) -> Unit = {},
-    onPoiClick: (PoiEntity) -> Unit = {}
+    onPoiClick: (PoiEntity) -> Unit = {},
+    onFollowGpsChanged: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val currentOnCenterChanged by rememberUpdatedState(onCenterChanged)
     val currentOnZoomChanged by rememberUpdatedState(onZoomChanged)
     val currentOnPoiClick by rememberUpdatedState(onPoiClick)
+    val currentOnFollowGpsChanged by rememberUpdatedState(onFollowGpsChanged)
+    val currentFollowGps by rememberUpdatedState(followGps)
+
+    var lastViewCenter by remember { mutableStateOf<LatLong?>(null) }
+    var lastViewZoom by remember { mutableIntStateOf(-1) }
     
     val tileCache = remember {
         AndroidUtil.createTileCache(
@@ -78,15 +90,32 @@ fun MapsforgeMapView(
                 isClickable = true
                 mapZoomControls.isShowMapZoomControls = true
 
+                setOnTouchListener { view, event ->
+                    if (currentFollowGps && (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE)) {
+                        currentOnFollowGpsChanged(false)
+                    }
+                    if (event.action == MotionEvent.ACTION_UP) {
+                        view.performClick()
+                    }
+                    false
+                }
+
                 model.mapViewPosition.addObserver {
                     val newCenter = model.mapViewPosition.center
                     val newZoom = model.mapViewPosition.zoomLevel.toInt()
                     
                     if (state.center != newCenter) {
+                        lastViewCenter = newCenter
                         state.center = newCenter
-                        currentOnCenterChanged(newCenter)
+                        
+                        // Only notify ViewModel of center changes if not following GPS 
+                        // to avoid heavy recomposition loops during animation.
+                        if (!currentFollowGps) {
+                            currentOnCenterChanged(newCenter)
+                        }
                     }
                     if (state.zoomLevel != newZoom) {
+                        lastViewZoom = newZoom
                         state.zoomLevel = newZoom
                         currentOnZoomChanged(newZoom)
                     }
@@ -111,7 +140,7 @@ fun MapsforgeMapView(
                         layerManager.layers.add(trl)
 
                         // 2. Erstelle und füge das Lat/Long Gitter hinzu
-                        val gridLayer: LatLngGridLayer = LatLngGridLayer()
+                        val gridLayer = LatLngGridLayer()
                         if (SettingsRepository(context).getLatLngGrid())
                             layerManager.layers.add(gridLayer)
 
@@ -138,43 +167,67 @@ fun MapsforgeMapView(
             }
         },
         update = { view ->
-            // Sync state to view only if it's different to avoid feedback loops
-            if (view.model.mapViewPosition.zoomLevel.toInt() != state.zoomLevel) {
+            val cache = view.getOrCreateCache()
+
+            // Sync state to view only if it's different and didn't originate from the view
+            if (state.zoomLevel != lastViewZoom) {
                 view.model.mapViewPosition.setZoomLevel(state.zoomLevel.toByte())
+                lastViewZoom = state.zoomLevel
+            }
+            if (state.center != lastViewCenter) {
+                view.model.mapViewPosition.setCenter(state.center)
+                lastViewCenter = state.center
             }
 
             // Update GPS location
+            val lastAnimatedGps = cache["last_animated_gps"] as? LatLong
             currentLocation?.let {
                 val newPos = LatLong(it.latitude, it.longitude)
-                gpsMarker.latLong = newPos
+                if (gpsMarker.latLong != newPos) {
+                    gpsMarker.latLong = newPos
+                }
                 if (!view.layerManager.layers.contains(gpsMarker)) {
                     view.layerManager.layers.add(gpsMarker)
                 }
                 
-                if (followGps) {
-                    view.model.mapViewPosition.animateTo(newPos)
-                    state.center = newPos
+                if (followGps && newPos != lastAnimatedGps) {
+                    val currentPos = view.model.mapViewPosition.center
+                    // Only animate if the distance is significant (> 1 meter approx)
+                    // and we haven't already triggered an animation for this GPS point.
+                    if (currentPos.distance(newPos) > 0.00001) { 
+                        view.model.mapViewPosition.animateTo(newPos)
+                        cache["last_animated_gps"] = newPos
+                        lastViewCenter = newPos
+                    }
                 }
             }
 
             // Update Polylines
-            updatePolyline(view, loadedPolyline, loadedTrackPoints)
+            updatePolyline(view, loadedPolyline, loadedTrackPoints, cache, "loaded")
             updateDistanceMarkers(view, distanceMarkers, state.zoomLevel)
-            updatePolyline(view, activePolyline, activeTrackPoints)
+            updatePolyline(view, activePolyline, activeTrackPoints, cache, "active")
 
             // Update POIs (only when pois or zoomLevel change)
-            if (view.tag != pois.hashCode() + state.zoomLevel) {
+            val poiCacheKey = "pois_${pois.hashCode()}_${state.zoomLevel}"
+            if (cache["poi_key"] != poiCacheKey) {
                 updatePoiMarkers(view, pois, state.zoomLevel, currentOnPoiClick)
-                view.tag = pois.hashCode() + state.zoomLevel
+                cache["poi_key"] = poiCacheKey
             }
             
-            // Update Theme
-            val trl = view.layerManager.layers.filterIsInstance<TileRendererLayer>().firstOrNull()
-            trl?.let { applyTheme(it, themeXmlFile) }
+            // Update Theme (only when file changes)
+            val themeKey = themeXmlFile?.absolutePath ?: "none"
+            if (cache["theme_key"] != themeKey) {
+                val trl = view.layerManager.layers.filterIsInstance<TileRendererLayer>().firstOrNull()
+                trl?.let { applyTheme(it, themeXmlFile) }
+                cache["theme_key"] = themeKey
+            }
             
-            view.layerManager.redrawLayers()
+            // Only redraw if something actually changed or periodically?
+            // Redrawing every update (which happens on every scroll pixel) is expensive.
+            // view.layerManager.redrawLayers()
         },
         onRelease = { view ->
+
             tileCache.destroy()
             view.destroyAll()
         }
@@ -235,19 +288,27 @@ private fun updateDistanceMarkers(
         return
     }
 
-    // Optimization: Check if we need to recreate markers
+    // Optimization: Check if we need to recreate markers without allocating iterators/pairs
     if (existingMarkers.size == markers.size &&
-        existingMarkers.firstOrNull()?.zoomLevel == zoomLevel &&
-        existingMarkers.zip(markers).all { (existing, new) -> 
-            existing.distanceKm == new.distanceKm && 
-            existing.latLong == new.latLong &&
-            existing.isActive == new.isActive
-        }) {
-        return
+        existingMarkers.firstOrNull()?.zoomLevel == zoomLevel) {
+        
+        var allMatch = true
+        for (i in markers.indices) {
+            val existing = existingMarkers[i]
+            val new = markers[i]
+            if (existing.distanceKm != new.distanceKm || 
+                existing.latLong != new.latLong ||
+                existing.isActive != new.isActive) {
+                allMatch = false
+                break
+            }
+        }
+        if (allMatch) return
     }
 
     Timber.i("Updating distance markers: ${markers.size} at zoom $zoomLevel")
     layers.removeAll(existingMarkers)
+
 
     // Add new markers
     markers.forEach { dm ->
@@ -320,21 +381,29 @@ private fun createPolyline(
     return Polyline(linePaint, AndroidGraphicFactory.INSTANCE)
 }
 
-private fun updatePolyline(map: MapView, polyline: Polyline, points: List<RoutePoint>) {
+private fun updatePolyline(
+    map: MapView, 
+    polyline: Polyline, 
+    points: List<RoutePoint>,
+    cache: MutableMap<String, Any?>,
+    key: String
+) {
     val layers = map.layerManager.layers
     if (points.isEmpty()) {
         layers.remove(polyline)
+        cache.remove("polyline_hash_$key")
         return
     }
 
-    // Optimization: avoid mapping if the number of points hasn't changed and it's already visible
-    // This is a basic optimization for performance in typical track recording scenarios.
-    if (layers.contains(polyline) && polyline.getLatLongs().size == points.size) {
+    // Optimization: avoid mapping if the points haven't changed
+    val currentPointsHash = points.hashCode()
+    if (layers.contains(polyline) && cache["polyline_hash_$key"] == currentPointsHash) {
         return
     }
 
     val latLongs = points.map { LatLong(it.latitude, it.longitude) }
     polyline.setPoints(latLongs)
+    cache["polyline_hash_$key"] = currentPointsHash
     
     if (!layers.contains(polyline)) {
         layers.add(polyline)
@@ -403,4 +472,42 @@ private fun createPoiMarker(poi: PoiEntity, zoomLevel: Int, onPoiClick: (PoiEnti
     canvas.drawCircle(center.toInt(), center.toInt(), radius + 1, outerBorderPaint)
     
     return PoiMarker(LatLong(poi.latitude, poi.longitude), bitmap, poi, 0, 0, onPoiClick, mapView)
+}
+
+@Preview(showBackground = true)
+@Composable
+fun MapsforgeMapViewPreview() {
+    RamaniTheme {
+        MapsforgeMapView(
+            mapFile = null,
+            themeXmlFile = null,
+            currentLocation = RoutePoint(latitude = 52.520008, longitude = 13.404954),
+            loadedTrackPoints = listOf(
+                RoutePoint(latitude = 52.520008, longitude = 13.404954),
+                RoutePoint(latitude = 52.525008, longitude = 13.410954)
+            ),
+            activeTrackPoints = listOf(
+                RoutePoint(latitude = 52.520008, longitude = 13.404954)
+            ),
+            distanceMarkers = listOf(
+                DistanceMarker(latLong = LatLong(52.520008, 13.404954), distanceKm = 0, isActive = true)
+            ),
+            pois = listOf(
+                PoiEntity(id = 1, label = "Sample POI", latitude = 52.522008, longitude = 13.407954)
+            )
+        )
+    }
+}
+
+/**
+ * Helper to manage cache on the MapView tag.
+ */
+@Suppress("UNCHECKED_CAST")
+private fun MapView.getOrCreateCache(): MutableMap<String, Any?> {
+    var cache = tag as? MutableMap<String, Any?>
+    if (cache == null) {
+        cache = mutableMapOf()
+        tag = cache
+    }
+    return cache
 }

@@ -29,8 +29,8 @@ fun StatisticsOverlay(
 ) {
     val context = LocalContext.current
     val hasPressureSensor = remember(context) {
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) != null
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        sensorManager?.getDefaultSensor(Sensor.TYPE_PRESSURE) != null
     }
 
     Card(

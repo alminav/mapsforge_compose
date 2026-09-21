@@ -70,7 +70,12 @@ fun SettingsScreen(
     onHgtFileSelected: (String?) -> Unit = {},
     onHgtFileDeleted: (String) -> Unit = {},
     onHgtImported: (Uri) -> Unit = {},
-    onDownloadMap: (MapRegion) -> Unit = {}
+    onDownloadMap: (MapRegion) -> Unit = {},
+    isDownloading: Boolean = false,
+    downloadMessage: String? = null,
+    onDownloadGhzClick: (String, String) -> Unit = { _, _ -> },
+    onDownloadMapClick: (String, String) -> Unit = { _, _ -> },
+    onDownloadHgtClick: (String, String) -> Unit = { _, _ -> }
 ) {
     SettingsScreenContent(
         initialSelectedThemeId = repository.getSelectedThemeId(),
@@ -119,7 +124,12 @@ fun SettingsScreen(
         },
         onHgtFileDeleted = onHgtFileDeleted,
         onHgtImported = onHgtImported,
-        onDownloadMap = onDownloadMap
+        onDownloadMap = onDownloadMap,
+        isDownloading = isDownloading,
+        downloadMessage = downloadMessage,
+        onDownloadGhzClick = onDownloadGhzClick,
+        onDownloadMapClick = onDownloadMapClick,
+        onDownloadHgtClick = onDownloadHgtClick
     )
 }
 
@@ -156,73 +166,17 @@ fun SettingsScreenContent(
     onHgtFileSelected: (String?) -> Unit,
     onHgtFileDeleted: (String) -> Unit,
     onHgtImported: (Uri) -> Unit,
-    onDownloadMap: (MapRegion) -> Unit
+    onDownloadMap: (MapRegion) -> Unit,
+    isDownloading: Boolean,
+    downloadMessage: String?,
+    onDownloadGhzClick: (String, String) -> Unit,
+    onDownloadMapClick: (String, String) -> Unit,
+    onDownloadHgtClick: (String, String) -> Unit
 ) {
     BackHandler(onBack = onBack)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val resources = LocalResources.current
-    val downloader: MagentaCloudDownloader = remember { MagentaCloudDownloader() }
-    var isDownloading by remember { mutableStateOf(false) }
-    var downloadMessage by remember { mutableStateOf<String?>(null) }
-
-    fun startDownload(
-        fileName: String,
-        link: String,
-        onProcess: suspend (File) -> Unit
-    ) {
-        Timber.i("Start download of $fileName")
-        scope.launch {
-            try {
-                isDownloading = true
-                downloadMessage = resources.getString(R.string.download_starting)
-                val cacheFile = File(context.cacheDir, fileName)
-                val downloadedFile = downloader.downloadFile(link, cacheFile)
-
-                if (downloadedFile != null) {
-                    Timber.i("Download successful: ${downloadedFile.absolutePath}")
-                    downloadMessage = resources.getString(R.string.download_success, downloadedFile.name)
-
-                    try {
-                        onProcess(downloadedFile)
-                        onGhFoldersRefresh()
-                    } catch (e: Exception) {
-                        Timber.e(e, "Processing failed for $fileName")
-                        downloadMessage = resources.getString(R.string.processing_failed)
-                    } finally {
-                        val bCleanup = downloadedFile.delete()
-                        Timber.i("Cleanup: $bCleanup ${downloadedFile.path}")
-                    }
-                } else {
-                    Timber.e("Download failed.")
-                    downloadMessage = resources.getString(R.string.download_failed)
-                }
-            } finally {
-                isDownloading = false
-            }
-        }
-    }
-
-    fun startGhzDownload(fileName: String, link: String) = startDownload(fileName, link) { file ->
-        val ghRootDir = context.getExternalFilesDir(null)?.resolve(Const.GH_ROOT_FOLDER)
-        if (ghRootDir != null) {
-            GhHelper.unzipGhFile(context, Uri.fromFile(file), ghRootDir)
-        }
-    }
-
-    fun startMapDownload(fileName: String, link: String) = startDownload(fileName, link) { file ->
-        val mapRootDir = context.getExternalFilesDir(null)?.resolve(Const.MAPFOLDER)
-        if (mapRootDir != null) {
-            GhHelper.unzipFile(context, Uri.fromFile(file), mapRootDir, extensionFilter = ".map", flatten = true)
-        }
-    }
-
-    fun startHgtDownload(fileName: String, link: String) = startDownload(fileName, link) { file ->
-        val hgtRootDir = context.getExternalFilesDir(null)?.resolve(Const.HGT_FOLDER_NAME)
-        if (hgtRootDir != null) {
-            GhHelper.unzipFile(context, Uri.fromFile(file), hgtRootDir, flatten = true)
-        }
-    }
 
     var selectedThemeId by remember { mutableStateOf(initialSelectedThemeId) }
     var selectedGhFolderId by remember { mutableStateOf(selectedGhFolder) }
@@ -383,31 +337,6 @@ fun SettingsScreenContent(
         )
     }
 
-    if (isDownloading || downloadMessage != null) {
-        AlertDialog(
-            onDismissRequest = { if (!isDownloading) downloadMessage = null },
-            title = { Text(if (isDownloading) "Download läuft" else "Download Status") },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (isDownloading) {
-                        CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-                    }
-                    downloadMessage?.let { Text(it) }
-                }
-            },
-            confirmButton = {
-                if (!isDownloading) {
-                    TextButton(onClick = { downloadMessage = null }) {
-                        Text("OK")
-                    }
-                }
-            }
-        )
-    }
-
     val pagerState = rememberPagerState(pageCount = { 3 })
     val tabs = listOf("Allgemein", "Karten", "Routing")
 
@@ -464,11 +393,7 @@ fun SettingsScreenContent(
                     selectedHgtFileName = selectedHgtFileName,
                     onHgtSelectionClick = { showHgtSelectionDialog = true },
                     onHgtFileReset = { onHgtFileSelected(null) },
-                    onDownloadHgt = {
-                        name, link ->
-                        Timber.i("Download HGT: $name $link")
-                        startHgtDownload(name, link)
-                    },
+                    onDownloadHgt = onDownloadHgtClick,
                     hgtFiles = hgtFiles,
                     webMagentaCloudHgt = { showWebViewMagentaCloudHgt = true }
                 )
@@ -486,10 +411,8 @@ fun SettingsScreenContent(
                         selectedThemeId = it
                         onThemeSelected(it)
                     },
-                    onMapsforgeDownloadClick = { name, link ->
-                    Timber.i("Download Mapsforge: $name $link")
-                    startMapDownload(name, link)
-                })
+                    onMapsforgeDownloadClick = onDownloadMapClick
+                )
 
                 2 -> RoutingSettingsTab(
                     locomotionKey = locomotionKey,
@@ -505,9 +428,7 @@ fun SettingsScreenContent(
                     },
                     onGhFolderDeleted = onGhFolderDeleted,
                     onImportGhZip = { ghZipPickerLauncher.launch("*/*") },
-                    onDownloadGhz = { name, link ->
-                        Timber.i("Download GHZ: $name $link")
-                        startGhzDownload(name, link) },
+                    onDownloadGhz = onDownloadGhzClick,
                     webMagentaCloudGh = { showWebViewMagentaCloudGh = true }
                 )
             }
@@ -1420,7 +1341,12 @@ fun SettingsScreenPreview() {
         onHgtFileSelected = {},
         onHgtFileDeleted = {},
         onHgtImported = {},
-        onDownloadMap = {}
+        onDownloadMap = {},
+        isDownloading = false,
+        downloadMessage = null,
+        onDownloadGhzClick = { _, _ -> },
+        onDownloadMapClick = { _, _ -> },
+        onDownloadHgtClick = { _, _ -> }
     )
 }
 

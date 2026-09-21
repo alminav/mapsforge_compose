@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.LocationDisabled
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Place
@@ -38,12 +39,12 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -56,9 +57,13 @@ import com.almica.mapsforge_compose.charts.GradientChart
 import com.almica.mapsforge_compose.charts.RouteEntity
 import com.almica.mapsforge_compose.charts.SpeedChart
 import com.almica.mapsforge_compose.charts.toKmlString
+import com.almica.mapsforge_compose.externalData.MagentaCloud
 import com.almica.mapsforge_compose.gh.GhHelper.Locomotion
+import com.almica.mapsforge_compose.gh.HgtReader.Companion.getTileName
 import com.almica.mapsforge_compose.gh.RoundtripValuePickerDialog
+import com.almica.mapsforge_compose.gh.getTileRect
 import com.almica.mapsforge_compose.weather.WeatherScreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.mapsforge.core.model.LatLong
@@ -150,12 +155,8 @@ fun MainScreen(viewModel: MainViewModel) {
                 stats = tourStats,
                 onMove = viewModel::setTargetPosition,
                 onZoomChanged = viewModel::setZoomLevel,
-                onStartTracking = {
-                    viewModel.startTracking(context)
-                    viewModel.setKeepScreenOn(true) },
-                onStopTracking = {
-                    viewModel.stopTracking(context)
-                    viewModel.setKeepScreenOn(false) },
+                onStartTracking = { viewModel.startTracking(context) },
+                onStopTracking = { viewModel.stopTracking(context) },
                 searchAddressPreset = uiState.pendingPoiAddress,
                 onDismissSearchPreset = { viewModel.setPendingPoiAddress(null) },
                 onAddPoi = { label, desc, latLong ->
@@ -163,7 +164,13 @@ fun MainScreen(viewModel: MainViewModel) {
                     viewModel.addPoi(label, desc, latLong)
                 },
                 onDeletePoi = viewModel::deletePoi,
-                onToggleFollowGps = { viewModel.setFollowGps(!uiState.followGps) },
+                onToggleFollowGps = {
+                    viewModel.setFollowGps(!uiState.followGps)
+                    if (!uiState.followGps) {
+                        val lastGpsPosition = uiState.activeTrackPoints.lastOrNull()?.let { LatLong(it.latitude, it.longitude) }
+                        viewModel.setTargetPosition(lastGpsPosition)
+                    }
+                },
                 onSaveTrack = { name -> viewModel.saveCurrentTrack(name) },
                 onClearTrack = {
                     viewModel.setLoadedTrackPoints(emptyList())
@@ -303,22 +310,31 @@ fun MainScreen(viewModel: MainViewModel) {
                 },
                 onMapFileSelected = { viewModel.selectMapFile(it) },
                 onMapImported = { viewModel.importMapFile(context, it) },
-                onMapFileDeleted = {
-                    val result = uiState.mapDir?.resolve(it)?.delete()
-                    Timber.i("Map file deleted: $it $result")
-                    if (result == true) {
-                        viewModel.refreshMapFiles()
+                onMapFileDeleted = { fileName ->
+                    scope.launch(Dispatchers.IO) {
+                        val result = uiState.mapDir?.resolve(fileName)?.delete()
+                        Timber.i("Map file deleted: $fileName $result")
+                        if (result == true) {
+                            viewModel.refreshMapFiles()
+                        }
                     }
                 },
                 onHgtFileSelected = { viewModel.selectHgtFile(it) },
                 onHgtImported = { viewModel.importHgtFile(context, it) },
-                onHgtFileDeleted = {
-                    val result = uiState.externalFilesDir?.resolve(Const.HGT_FOLDER_NAME)?.resolve(it)?.delete()
-                    Timber.i("HGT file deleted: $it $result")
-                    if (result == true) {
-                        viewModel.refreshMapFiles()
+                onHgtFileDeleted = { fileName ->
+                    scope.launch(Dispatchers.IO) {
+                        val result = uiState.externalFilesDir?.resolve(Const.HGT_FOLDER_NAME)?.resolve(fileName)?.delete()
+                        Timber.i("HGT file deleted: $fileName $result")
+                        if (result == true) {
+                            viewModel.refreshMapFiles()
+                        }
                     }
-                }
+                },
+                isDownloading = uiState.isDownloading,
+                downloadMessage = uiState.downloadMessage,
+                onDownloadGhzClick = viewModel::startGhzDownload,
+                onDownloadMapClick = viewModel::startMapDownload,
+                onDownloadHgtClick = viewModel::startHgtDownload
             )
         },
         onSearchFinished = { latLong, address ->
@@ -458,16 +474,6 @@ fun MainScreenContent(
                                     currentLatLng = null //targetPosition?.let { LatLng(it.latitude, it.longitude) }
                                 )
                             }
-                            /*
-                                                        Box(
-                                                            Modifier
-                                                                .fillMaxWidth()
-                                                                .height(128.dp),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Text("Bottom Sheet Content")
-                                                        }
-                             */
                         },
                         modifier = Modifier.padding(innerPadding),
                         sheetSwipeEnabled = true
@@ -482,7 +488,7 @@ fun MainScreenContent(
             }
 
             if (isDownloading) {
-                DownloadOverlay(downloadMessage, if (mapFileExists) 1F else downloadProgress)
+                DownloadOverlay(downloadMessage, -1f)
             }
 
             if (showSearch) {
@@ -550,6 +556,11 @@ fun MapViewContainer(
         onMove = { latLong -> onMove(latLong) },
         onZoomChanged = { zoom -> onZoomChanged(zoom) },
         onPoiClick = onPoiClick,
+        onFollowGpsChanged = { enabled ->
+            if (!enabled && uiState.followGps) {
+                onToggleFollowGps()
+            }
+        },
         targetPosition = uiState.targetPosition,
         zoomLevel = uiState.zoomLevel,
         followGps = uiState.followGps,
@@ -560,12 +571,12 @@ fun MapViewContainer(
                 stats = stats,
                 hasTrack = uiState.loadedTrackPoints.isNotEmpty(),
                 loadedTrackName = uiState.loadedTrackName,
-                followGps = uiState.followGps,
                 mapCenter = uiState.targetPosition,
+                followGps = uiState.followGps,
                 pois = uiState.pois,
-                context = context,
                 searchAddressPreset = searchAddressPreset,
                 onDismissSearchPreset = onDismissSearchPreset,
+                context = context,
                 onStartTracking = onStartTracking,
                 onStopTracking = onStopTracking,
                 onAddPoi = { label, desc ->
@@ -578,16 +589,16 @@ fun MapViewContainer(
                 onToggleFollowGps = onToggleFollowGps,
                 onSaveTrack = onSaveTrack,
                 onClearTrack = onClearTrack,
+                omRouteAppend = onRouteAppend,
                 onShowGradientChart = onShowGradientChart,
                 onShowElevationChart = onShowElevationChart,
-                onShowActiveElevationChart = onShowActiveElevationChart,
-                onShowActiveSpeedChart = onShowActiveSpeedChart,
-                onSearchClick = onSearchClick,
-                omRouteAppend = onRouteAppend,
                 onHistoryClick = onHistoryClick,
                 onSettingsClick = onSettingsClick,
                 onCalculateRoute = onCalculateRoute,
-                onCalculateRoundtrip = onCalculateRoundtrip
+                onCalculateRoundtrip = onCalculateRoundtrip,
+                onShowActiveElevationChart = onShowActiveElevationChart,
+                onShowActiveSpeedChart = onShowActiveSpeedChart,
+                onSearchClick = onSearchClick
             )
         }
     )
@@ -606,6 +617,7 @@ fun MapViewContainerContent(
     onMove: (LatLong) -> Unit,
     onZoomChanged: (Int) -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
+    onFollowGpsChanged: (Boolean) -> Unit,
     targetPosition: LatLong?,
     zoomLevel: Int,
     followGps: Boolean,
@@ -633,8 +645,23 @@ fun MapViewContainerContent(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        val updateTargetPosition = {
-            mapViewReference.value?.model?.mapViewPosition?.center?.let { onMove(it) }
+        val mapState = remember {
+            MapsforgeMapState(
+                initialZoom = zoomLevel,
+                initialCenter = targetPosition ?: LatLong(0.0, 0.0)
+            )
+        }
+
+        // Sync external changes to mapState (e.g. from search or GPS follow)
+        // We use a key to identify if the change is from an external source or just a scroll?
+        // Actually, just checking if it's different enough might suffice.
+        LaunchedEffect(targetPosition, zoomLevel) {
+            if (targetPosition != null && targetPosition != mapState.center) {
+                mapState.center = targetPosition
+            }
+            if (zoomLevel != mapState.zoomLevel) {
+                mapState.zoomLevel = zoomLevel
+            }
         }
 
         MapsforgeMapView(
@@ -646,19 +673,15 @@ fun MapViewContainerContent(
             distanceMarkers = distanceMarkers,
             pois = pois,
             followGps = followGps,
-            state = remember { 
-                MapsforgeMapState(
-                    initialZoom = zoomLevel,
-                    initialCenter = targetPosition ?: LatLong(0.0, 0.0)
-                ) 
-            },
+            state = mapState,
             onMapViewReady = { mv ->
+
                 mapViewReference.value = mv
-                updateTargetPosition()
             },
             onCenterChanged = onMove,
             onZoomChanged = onZoomChanged,
-            onPoiClick = onPoiClick
+            onPoiClick = onPoiClick,
+            onFollowGpsChanged = onFollowGpsChanged
         )
 
         // Crosshair overlay
@@ -680,16 +703,16 @@ fun MapViewContainerContent(
         ) {
             SmallFloatingActionButton(
                 onClick = {
-                    mapViewReference.value?.model?.mapViewPosition?.zoomIn()
-                    updateTargetPosition()
+                    val newZoom = (mapState.zoomLevel + 1).coerceAtMost(22)
+                    onZoomChanged(newZoom)
                 }
             ) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.zoom_in))
             }
             SmallFloatingActionButton(
                 onClick = {
-                    mapViewReference.value?.model?.mapViewPosition?.zoomOut()
-                    updateTargetPosition()
+                    val newZoom = (mapState.zoomLevel - 1).coerceAtLeast(3)
+                    onZoomChanged(newZoom)
                 }
             ) {
                 Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
@@ -701,6 +724,7 @@ fun MapViewContainerContent(
 
 @Composable
 fun DownloadOverlay(message: String, progress: Float) {
+    Timber.i("DownloadOverlay: $message $progress")
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -777,6 +801,7 @@ fun MapControls(
     onSearchClick: () -> Unit
 ) {
     val mainViewModel: MainViewModel = viewModel()
+    val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -792,12 +817,109 @@ fun MapControls(
     var showPoiListDialog by remember { mutableStateOf(false) }
     var showSaveTrackDialog by remember { mutableStateOf(false) }
     var selectedWeatherPoi by rememberSaveable { mutableStateOf<PoiEntity?>(null) }
+    var showMapState: String? by remember { mutableStateOf(null) }
+    val scope = rememberCoroutineScope()
 
     // Launch POI dialog if an address was preset from search
     LaunchedEffect(searchAddressPreset) {
         if (searchAddressPreset != null) {
             showAddPoiDialog = true
         }
+    }
+
+    LaunchedEffect(showMapState) {
+        val stateName = showMapState ?: return@LaunchedEffect
+        val tileCenter = getTileRect(stateName)?.center
+        val center = tileCenter?.let { LatLong(it.latitude, it.longitude) }
+        mainViewModel.updateViewport(center, 8)
+    }
+
+    var currentMapCenter = mapCenter
+    if (showMapState != null) {
+        val stateTileName = showMapState!!
+        val tileCenter = getTileRect(stateTileName)?.center
+        currentMapCenter = tileCenter?.let { LatLong(it.latitude, it.longitude) }
+
+        val mapFile = uiState.mapFiles.find { it.startsWith(stateTileName, ignoreCase = true) }
+        val hgtFile = uiState.hgtFiles.find { it.startsWith(stateTileName, ignoreCase = true) }
+        val ghFolder = uiState.graphHopperFolders.find { it.startsWith(stateTileName, ignoreCase = true) }
+
+        AlertDialog(
+            onDismissRequest = { showMapState = null },
+            title = { Text("Map-Info: $stateTileName") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MapStateItem(
+                        label = "Mapsforge (.map)",
+                        fileName = mapFile,
+                        isAvailable = mapFile != null,
+                        cloudLink = MagentaCloud.maps["${stateTileName.lowercase()}.map.zip"],
+                        isDownloading = uiState.isDownloading && uiState.downloadMessage?.contains(stateTileName, ignoreCase = true) == true && uiState.downloadMessage?.contains(".map") == true,
+                        onDownloadClick = {
+                            Timber.i("Download map $stateTileName $it")
+                            mainViewModel.startMapDownload("${stateTileName.lowercase()}.map.zip", it)
+                        },
+                        downloadProgress = if (uiState.isDownloading &&
+                            uiState.downloadMessage?.contains(stateTileName, ignoreCase = true) == true &&
+                            uiState.downloadMessage?.contains(".map") == true) uiState.downloadProgress else -1f,
+                        onDeleteClick = { fileName ->
+                            Timber.i("Delete map $fileName")
+                            scope.launch(Dispatchers.IO) {
+                                File(uiState.mapDir, fileName).delete()
+                                mainViewModel.refreshMapFiles()
+                            }
+                        }
+                    )
+                    MapStateItem(
+                        label = "GraphHopper (Routing)",
+                        fileName = ghFolder,
+                        isAvailable = ghFolder != null,
+                        cloudLink = MagentaCloud.gh["${stateTileName.lowercase()}3d.ghz"],
+                        onDownloadClick = {
+                            Timber.i("Download gh $stateTileName $it")
+                            mainViewModel.startGhzDownload("${stateTileName.lowercase()}3d.ghz", it)
+                        },
+                        isDownloading = uiState.isDownloading && uiState.downloadMessage?.contains(stateTileName, ignoreCase = true) == true && uiState.downloadMessage?.contains(".ghz") == true,
+                        downloadProgress = if (uiState.isDownloading &&
+                            uiState.downloadMessage?.contains(stateTileName, ignoreCase = true) == true &&
+                            uiState.downloadMessage?.contains(".ghz") == true) uiState.downloadProgress else -1f,
+                        onDeleteClick = { fileName ->
+                            Timber.i("Delete gh $fileName")
+                            scope.launch(Dispatchers.IO) {
+                                File(uiState.ghDir, fileName).deleteRecursively()
+                                mainViewModel.refreshMapFiles()
+                            }
+                        }
+                    )
+                    MapStateItem(
+                        label = "SRTM (.hgt)",
+                        fileName = hgtFile,
+                        isAvailable = hgtFile != null,
+                        cloudLink = MagentaCloud.hgt["${stateTileName.lowercase()}hgt.zip"],
+                        onDownloadClick = {
+                            Timber.i("Download hgt $stateTileName $it")
+                            mainViewModel.startHgtDownload("${stateTileName.lowercase()}hgt.zip", it)
+                        },
+                        isDownloading = uiState.isDownloading && uiState.downloadMessage?.contains(stateTileName, ignoreCase = true) == true && uiState.downloadMessage?.contains("hgt") == true,
+                        downloadProgress = if (uiState.isDownloading &&
+                            uiState.downloadMessage?.contains(stateTileName, ignoreCase = true) == true &&
+                            uiState.downloadMessage?.contains("hgt") == true) uiState.downloadProgress else -1f,
+                        onDeleteClick = { fileName ->
+                            Timber.i("Delete hgt $fileName")
+                            scope.launch(Dispatchers.IO) {
+                                File(uiState.hgtDir, fileName).delete()
+                                mainViewModel.refreshMapFiles()
+                            }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMapState = null }) {
+                    Text(stringResource(R.string.action_close))
+                }
+            }
+        )
     }
 
     if (showAddPoiDialog) {
@@ -845,13 +967,13 @@ fun MapControls(
     if (showPoiListDialog) {
         PoiListDialog(
             pois = pois,
-            mapLocation = mapCenter?.let { RoutePoint(it.latitude, it.longitude) },
+            mapLocation = currentMapCenter?.let { RoutePoint(it.latitude, it.longitude) },
             onDismiss = { showPoiListDialog = false },
             onPoiClick = onPoiClick,
             onDeletePoi = onDeletePoi,
             onCalculateRoute = { lat, lon, vehicle ->
                 (currentLocation?.let { LatLong(it.latitude, it.longitude) }
-                    ?: mapCenter)?.let { start ->
+                    ?: currentMapCenter)?.let { start ->
                     mainViewModel.selectLocomotion(vehicle.key)
                     onCalculateRoute(start.latitude, start.longitude, lat, lon)
                     showPoiListDialog = false
@@ -859,7 +981,7 @@ fun MapControls(
             },
             onCalculateRoundtrip = { lat, lon, vehicle ->
                 (currentLocation?.let { LatLong(it.latitude, it.longitude) }
-                    ?: mapCenter)?.let { start ->
+                    ?: currentMapCenter)?.let { start ->
                     mainViewModel.selectLocomotion(vehicle.key)
                     onCalculateRoundtrip(start.latitude, start.longitude, lat, lon)
                     showPoiListDialog = false
@@ -978,6 +1100,10 @@ fun MapControls(
         onShowActiveSpeedChart = onShowActiveSpeedChart,
         onSearchClick = onSearchClick,
         omRouteAppend = omRouteAppend,
+        mapCenter = currentMapCenter,
+        onMagentaMap = {
+            showMapState = it
+            Timber.i("onMagentaMap: $it") }
     )
 }
 
@@ -1001,8 +1127,13 @@ fun MapControlsContent(
     onShowElevationChart: () -> Unit,
     onShowActiveElevationChart: () -> Unit,
     onShowActiveSpeedChart: () -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    mapCenter: LatLong?,
+    onMagentaMap: (String?) -> Unit
 ) {
+    val tileName = getTileName(mapCenter?.latitude ?: 0.0, mapCenter?.longitude ?: 0.0)
+    //Timber.i("tileName: $tileName")
+    val magentaMap = MagentaCloud.maps[tileName.lowercase()+".map.zip"]
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1071,6 +1202,16 @@ fun MapControlsContent(
                     },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
                 )
+                if (magentaMap != null) {
+                    DropdownMenuItem(
+                        text = { Text(tileName.lowercase()) },
+                        onClick = {
+                            showPoiMenu = false
+                            onMagentaMap(tileName.lowercase())
+                        },
+                        leadingIcon = { Icon(Icons.Default.Map, contentDescription = null) }
+                    )
+                }
             }
         }
 
@@ -1165,6 +1306,74 @@ fun MapControlsContent(
 }
 
 @Composable
+fun MapStateItem(
+    label: String,
+    fileName: String?,
+    isAvailable: Boolean,
+    cloudLink: String? = null,
+    isDownloading: Boolean = false,
+    downloadProgress: Float = -1f,
+    onDownloadClick: (String) -> Unit = {},
+    onDeleteClick: (String) -> Unit = {}
+) {
+    val (stateText, stateColor) = when {
+        isAvailable -> "Found" to Color(0xFF4CAF50) // Green
+        cloudLink != null -> "Available" to Color(0xFF2196F3) // Blue (Material Info)
+        else -> "Not Available" to Color(0xFFF44336) // Red
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(text = label, style = MaterialTheme.typography.bodyMedium)
+            if (fileName != null) {
+                Text(text = fileName, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stateText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = stateColor
+            )
+            if (isAvailable && fileName != null) {
+                IconButton(onClick = {
+                    onDeleteClick(fileName)
+                }) {
+                    Icon(imageVector = Icons.Default.Delete,
+                        contentDescription = "Download",
+                        tint = Color(0xFFF44336))
+                }
+            } else if (cloudLink != null) {
+                if (isDownloading) {
+                    Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.Center) {
+                        if (downloadProgress >= 0f) {
+                            CircularProgressIndicator(
+                                progress = { downloadProgress.coerceIn(0f, 1f) },
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                } else {
+                    IconButton(onClick = {
+                        onDownloadClick(cloudLink)
+                    }) {
+                        Icon(imageVector = Icons.Default.Download,
+                             contentDescription = "Download",
+                             tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun MapCrosshair(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(40.dp)) {
         val strokeWidth = 2.dp.toPx()
@@ -1225,6 +1434,7 @@ fun MainScreenPreview() {
                 onMove = {},
                 onZoomChanged = {},
                 onPoiClick = {},
+                onFollowGpsChanged = {},
                 targetPosition = null,
                 zoomLevel = 12,
                 followGps = true,
@@ -1249,11 +1459,13 @@ fun MainScreenPreview() {
                         onPoiListClick = {},
                         onSaveTrackClick = {},
                         onShowGradientChart = {},
+                        omRouteAppend = {},
                         onShowElevationChart = {},
                         onShowActiveElevationChart = {},
                         onShowActiveSpeedChart = {},
                         onSearchClick = {},
-                        omRouteAppend = {}
+                        mapCenter = LatLong(52.5200, 13.4050),
+                        onMagentaMap = {}
                     )
                 }
             )

@@ -90,6 +90,7 @@
     <string name="no_results">No results found</string>
     <string name="clear_search">Clear search</string>
 
+    <string name="_download_starting">%1$s Starting download…</string>
     <string name="download_starting">Starting download…</string>
     <string name="download_success">Download successful: %1$s</string>
     <string name="download_failed">Download failed.</string>

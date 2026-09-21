@@ -19,6 +19,7 @@ import kotlinx.coroutines.Job
 import android.os.Build
 import android.provider.OpenableColumns
 import com.almica.mapsforge_compose.gh.HgtReader
+import com.almica.mapsforge_compose.externalData.MagentaCloudDownloader
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,6 +50,8 @@ data class MainUiState(
     val zoomLevel: Int = 12,
     val externalFilesDir: File? = null,
     val mapDir: File? = null,
+    val ghDir: File? = null,
+    val hgtDir: File? = null,
     val mapFiles: List<String> = emptyList(),
     val selectedMapFileName: String? = null,
     val hgtFiles: List<String> = emptyList(),
@@ -88,6 +91,7 @@ class MainViewModel(
     private val hgtDir = externalFilesDir?.resolve(Const.HGT_FOLDER_NAME)
     private val ghRootDir = externalFilesDir?.resolve(Const.GH_ROOT_FOLDER)
     private var saveJob: Job? = null
+    private val magentaDownloader = MagentaCloudDownloader()
 
     private val _uiState = MutableStateFlow(
         MainUiState(
@@ -96,6 +100,8 @@ class MainViewModel(
             mapFileExists = externalFilesDir?.resolve(settingsRepository.getSelectedRegion().fileName)?.exists() ?: false,
             externalFilesDir = externalFilesDir,
             mapDir = mapDir,
+            ghDir = ghRootDir,
+            hgtDir = hgtDir,
             themeFile = getThemeFile(),
             targetPosition = if (settingsRepository.getLastLatitude() != 0.0) {
                 LatLong(settingsRepository.getLastLatitude(), settingsRepository.getLastLongitude())
@@ -427,13 +433,27 @@ class MainViewModel(
         _uiState.update { it.copy(keepScreenOn = enabled) }
     }
 
+    fun saveLastPosition(position: LatLong?) {
+        Timber.d("saveLastPosition: $position")
+        position?.let {
+            settingsRepository.setLastLatitude(it.latitude)
+            settingsRepository.setLastLongitude(it.longitude)
+        }
+    }
+
     fun setTargetPosition(position: LatLong?) {
+        Timber.d("setTargetPosition: $position")
         _uiState.update { it.copy(targetPosition = position) }
         scheduleSave()
     }
 
     fun setZoomLevel(zoom: Int) {
         _uiState.update { it.copy(zoomLevel = zoom) }
+        scheduleSave()
+    }
+
+    fun updateViewport(position: LatLong?, zoom: Int) {
+        _uiState.update { it.copy(targetPosition = position, zoomLevel = zoom) }
         scheduleSave()
     }
 
@@ -537,6 +557,7 @@ class MainViewModel(
 
     fun startTracking(context: Context) {
         context.startService(Intent(context, TrackingService::class.java))
+        setKeepScreenOn(true)
         _uiState.update { it.copy(isTrackingActive = true) }
     }
 
@@ -545,8 +566,11 @@ class MainViewModel(
             action = "ACTION_STOP_TRACKING"
         }
         context.startService(intent)
+        setKeepScreenOn(false)
+        val lastGpsPosition = _uiState.value.activeTrackPoints.lastOrNull()?.let { LatLong(it.latitude, it.longitude) }
+        saveLastPosition(lastGpsPosition ?: _uiState.value.targetPosition)
         _uiState.update { it.copy(isTrackingActive = false) }
-        Timber.i("Tracking stopped")
+        Timber.i("Tracking stopped ${lastGpsPosition ?: _uiState.value.targetPosition}")
     }
 
     fun addPoi(label: String, description: String?, latLong: LatLong, altitude: Double? = null) {
@@ -713,6 +737,69 @@ class MainViewModel(
     
     fun setPendingPoiAddress(address: String?) {
         _uiState.update { it.copy(pendingPoiAddress = address) }
+    }
+
+    fun startDownload(
+        fileName: String,
+        link: String,
+        onProcess: suspend (File) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(
+                    isDownloading = true,
+                    downloadProgress = -1f,
+                    downloadMessage = getApplication<Application>().getString(R.string._download_starting, fileName)
+                ) }
+
+                val cacheFile = File(getApplication<Application>().cacheDir, fileName)
+                val downloadedFile = magentaDownloader.downloadFile(link, cacheFile)
+
+                if (downloadedFile != null) {
+                    _uiState.update { it.copy(
+                        downloadMessage = getApplication<Application>().getString(R.string.download_success, downloadedFile.name)
+                    ) }
+
+                    try {
+                        onProcess(downloadedFile)
+                        refreshMapFiles()
+                    } catch (e: Exception) {
+                        Timber.e(e, "Processing failed for $fileName")
+                        _uiState.update { it.copy(downloadMessage = getApplication<Application>().getString(R.string.processing_failed)) }
+                    } finally {
+                        downloadedFile.delete()
+                    }
+                } else {
+                    _uiState.update { it.copy(downloadMessage = getApplication<Application>().getString(R.string.download_failed)) }
+                }
+            } finally {
+                _uiState.update { it.copy(isDownloading = false) }
+            }
+        }
+    }
+
+    fun startGhzDownload(fileName: String, link: String) {
+        startDownload(fileName, link) { file ->
+            ghRootDir?.let { root ->
+                GhHelper.unzipGhFile(getApplication(), Uri.fromFile(file), root)
+            }
+        }
+    }
+
+    fun startMapDownload(fileName: String, link: String) {
+        startDownload(fileName, link) { file ->
+            mapDir?.let { root ->
+                GhHelper.unzipFile(getApplication(), Uri.fromFile(file), root, extensionFilter = ".map", flatten = true)
+            }
+        }
+    }
+
+    fun startHgtDownload(fileName: String, link: String) {
+        startDownload(fileName, link) { file ->
+            hgtDir?.let { root ->
+                GhHelper.unzipFile(getApplication(), Uri.fromFile(file), root, extensionFilter = ".hgt", flatten = true)
+            }
+        }
     }
 
     fun setRoundtripPending(
