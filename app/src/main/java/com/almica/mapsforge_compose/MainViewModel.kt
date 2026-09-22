@@ -442,7 +442,7 @@ class MainViewModel(
     }
 
     fun setTargetPosition(position: LatLong?) {
-        Timber.d("setTargetPosition: $position")
+        //Timber.d("setTargetPosition: $position")
         _uiState.update { it.copy(targetPosition = position) }
         scheduleSave()
     }
@@ -458,6 +458,8 @@ class MainViewModel(
     }
 
     private fun scheduleSave() {
+        // Debounce save operations: cancel the previous scheduled save if the user
+        // continues to move or zoom the map within the 500ms window.
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             delay(500.milliseconds)

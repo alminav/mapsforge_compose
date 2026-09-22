@@ -846,7 +846,7 @@ fun MapControls(
 
         AlertDialog(
             onDismissRequest = { showMapState = null },
-            title = { Text("Map-Info: $stateTileName") },
+            title = { Text("Map-Info: $stateTileName", style = MaterialTheme.typography.titleMedium) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     MapStateItem(
@@ -1140,25 +1140,30 @@ fun MapControlsContent(
             // Add navigation bar padding to the whole control layer to avoid overlap
             .windowInsetsPadding(WindowInsets.navigationBars)
     ) {
-        Row(modifier = Modifier
-            .padding(vertical = 5.dp)
-            .align(Alignment.TopCenter)) {
-            Button(onClick = {
-                if (isTrackingActive) {
-                    onStopTracking()
-                } else {
-                    onStartTracking()
+        Card(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
+        ) {
+            Row(modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+                Button(onClick = {
+                    if (isTrackingActive) {
+                        onStopTracking()
+                    } else {
+                        onStartTracking()
+                    }
+                }) {
+                    Text(if (isTrackingActive) stringResource(R.string.tracking_stop) else stringResource(R.string.tracking_start))
                 }
-            }) {
-                Text(if (isTrackingActive) stringResource(R.string.tracking_stop) else stringResource(R.string.tracking_start))
-            }
-            Spacer(modifier = Modifier.width(2.dp))
-            Button(onClick = onHistoryClick) {
-                Text(stringResource(R.string.menu_archive))
-            }
-            Spacer(modifier = Modifier.width(2.dp))
-            Button(onClick = onSettingsClick) {
-                Text(stringResource(R.string.menu_settings))
+                Spacer(modifier = Modifier.width(4.dp))
+                Button(onClick = onHistoryClick) {
+                    Text(stringResource(R.string.menu_archive))
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Button(onClick = onSettingsClick) {
+                    Text(stringResource(R.string.menu_settings))
+                }
             }
         }
 
@@ -1167,7 +1172,7 @@ fun MapControlsContent(
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(start = 8.dp, top = 50.dp)
+                .padding(start = 8.dp, top = 60.dp)
         ) {
             SmallFloatingActionButton(
                 onClick = { showPoiMenu = true }
@@ -1221,7 +1226,7 @@ fun MapControlsContent(
             containerColor = if (followGps) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(end = 8.dp, top = 50.dp)
+                .padding(end = 8.dp, top = 60.dp)
         ) {
             Icon(
                 imageVector = if (followGps) Icons.Default.MyLocation else Icons.Default.LocationDisabled,
@@ -1321,51 +1326,81 @@ fun MapStateItem(
         cloudLink != null -> "Available" to Color(0xFF2196F3) // Blue (Material Info)
         else -> "Not Available" to Color(0xFFF44336) // Red
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(text = label, style = MaterialTheme.typography.bodyMedium)
-            if (fileName != null) {
-                Text(text = fileName, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = stateText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = stateColor
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = androidx.compose.ui.graphics.lerp(
+                MaterialTheme.colorScheme.surfaceVariant,
+                Color.Black,
+                0.1f
             )
-            if (isAvailable && fileName != null) {
-                IconButton(onClick = {
-                    onDeleteClick(fileName)
-                }) {
-                    Icon(imageVector = Icons.Default.Delete,
-                        contentDescription = "Download",
-                        tint = Color(0xFFF44336))
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                if (fileName != null) {
+                    Text(
+                        text = fileName,
+                        style = MaterialTheme.typography.bodySmall,
+                        //color = Color.Gray
+                    )
                 }
-            } else if (cloudLink != null) {
-                if (isDownloading) {
-                    Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.Center) {
-                        if (downloadProgress >= 0f) {
-                            CircularProgressIndicator(
-                                progress = { downloadProgress.coerceIn(0f, 1f) },
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        }
-                    }
-                } else {
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(start = 12.dp, end = 4.dp)
+            ) {
+                Text(
+                    text = stateText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = stateColor
+                )
+                if (isAvailable && fileName != null) {
                     IconButton(onClick = {
-                        onDownloadClick(cloudLink)
+                        onDeleteClick(fileName)
                     }) {
-                        Icon(imageVector = Icons.Default.Download,
-                             contentDescription = "Download",
-                             tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                } else if (cloudLink != null) {
+                    if (isDownloading) {
+                        Box(
+                            modifier = Modifier.size(48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val progressModifier = Modifier.size(24.dp)
+                            val strokeWidth = 2.dp
+                            if (downloadProgress >= 0f) {
+                                CircularProgressIndicator(
+                                    progress = { downloadProgress.coerceIn(0f, 1f) },
+                                    modifier = progressModifier,
+                                    strokeWidth = strokeWidth
+                                )
+                            } else {
+                                CircularProgressIndicator(
+                                    modifier = progressModifier,
+                                    strokeWidth = strokeWidth
+                                )
+                            }
+                        }
+                    } else {
+                        IconButton(onClick = {
+                            onDownloadClick(cloudLink)
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }
