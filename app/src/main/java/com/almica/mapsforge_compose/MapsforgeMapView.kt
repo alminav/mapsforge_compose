@@ -204,7 +204,7 @@ fun MapsforgeMapView(
 
             // Update Polylines
             updatePolyline(view, loadedPolyline, loadedTrackPoints, cache, "loaded")
-            updateDistanceMarkers(view, distanceMarkers, state.zoomLevel)
+            updateDistanceMarkers(view, distanceMarkers, state.zoomLevel, loadedTrackPoints.isNotEmpty())
             updatePolyline(view, activePolyline, activeTrackPoints, cache, "active")
 
             // Update POIs (only when pois or zoomLevel change)
@@ -273,14 +273,22 @@ private fun createGpsMarker(
 private fun updateDistanceMarkers(
     map: MapView,
     markers: List<DistanceMarker>,
-    zoomLevel: Int
+    zoomLevel: Int,
+    hasLoadedTrack: Boolean
 ) {
     val layers = map.layerManager.layers
     
+    // Filter out active track distance markers if a track is loaded
+    val validMarkers = if (hasLoadedTrack) {
+        markers.filter { !it.isActive }
+    } else {
+        markers
+    }
+
     // Remove old distance markers
     val existingMarkers = layers.filterIsInstance<DistanceMarkerOverlay>()
 
-    if (markers.isEmpty()) {
+    if (validMarkers.isEmpty()) {
         if (existingMarkers.isNotEmpty()) {
             layers.removeAll(existingMarkers)
             map.layerManager.redrawLayers()
@@ -289,13 +297,13 @@ private fun updateDistanceMarkers(
     }
 
     // Optimization: Check if we need to recreate markers without allocating iterators/pairs
-    if (existingMarkers.size == markers.size &&
+    if (existingMarkers.size == validMarkers.size &&
         existingMarkers.firstOrNull()?.zoomLevel == zoomLevel) {
         
         var allMatch = true
-        for (i in markers.indices) {
+        for (i in validMarkers.indices) {
             val existing = existingMarkers[i]
-            val new = markers[i]
+            val new = validMarkers[i]
             if (existing.distanceKm != new.distanceKm || 
                 existing.latLong != new.latLong ||
                 existing.isActive != new.isActive) {
@@ -306,14 +314,16 @@ private fun updateDistanceMarkers(
         if (allMatch) return
     }
 
-    Timber.i("Updating distance markers: ${markers.size} at zoom $zoomLevel")
+    Timber.i("Updating distance markers: ${validMarkers.size} at zoom $zoomLevel")
     layers.removeAll(existingMarkers)
 
 
     // Add new markers
-    markers.forEach { dm ->
-        val marker = createDistanceMarkerOverlay(dm, zoomLevel)
-        layers.add(marker)
+    validMarkers.forEach { dm ->
+        val marker = createDistanceMarkerOverlay(dm, zoomLevel, hasLoadedTrack)
+        if (marker != null) {
+            layers.add(marker)
+        }
     }
 }
 
@@ -325,7 +335,15 @@ private class DistanceMarkerOverlay(
     val isActive: Boolean
 ) : Marker(latLong, bitmap, 0, 0)
 
-private fun createDistanceMarkerOverlay(dm: DistanceMarker, zoomLevel: Int): DistanceMarkerOverlay {
+private fun createDistanceMarkerOverlay(
+    dm: DistanceMarker,
+    zoomLevel: Int,
+    hasLoadedTrack: Boolean = false
+): DistanceMarkerOverlay? {
+    if (hasLoadedTrack && dm.isActive) {
+        return null
+    }
+
     val radius = (zoomLevel * 1.8f).toInt().coerceIn(20, 56)
     val size = radius * 2 + 12
     val bitmap = AndroidGraphicFactory.INSTANCE.createBitmap(size, size)
