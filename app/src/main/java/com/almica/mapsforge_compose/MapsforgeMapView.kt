@@ -3,7 +3,14 @@ package com.almica.mapsforge_compose
 //import org.mapsforge.map.rendertheme.InternalRenderTheme
 import android.view.MotionEvent
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -19,8 +26,6 @@ import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.datastore.MultiMapDataStore
-import org.mapsforge.map.layer.download.TileDownloadLayer
-import org.mapsforge.map.layer.download.tilesource.OnlineTileSource
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
@@ -171,7 +176,7 @@ fun MapsforgeMapView(
 
             // Sync state to view only if it's different and didn't originate from the view
             if (state.zoomLevel != lastViewZoom) {
-                view.model.mapViewPosition.setZoomLevel(state.zoomLevel.toByte())
+                view.model.mapViewPosition.zoomLevel = state.zoomLevel.toByte()
                 lastViewZoom = state.zoomLevel
             }
             if (state.center != lastViewCenter) {
