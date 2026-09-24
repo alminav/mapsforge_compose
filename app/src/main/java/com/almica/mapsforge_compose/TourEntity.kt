@@ -1,5 +1,7 @@
 package com.almica.mapsforge_compose
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Parcelable
 import androidx.room.*
 import kotlinx.parcelize.Parcelize
@@ -22,7 +24,8 @@ data class TourEntity(
     val startTime: Long = 0L,
     val totalDistanceKm: Double,
     val elevationGainMeters: Double,
-    val routePoints: List<RoutePoint>
+    val routePoints: List<RoutePoint>,
+    val thumbnail: Bitmap? = null
 ) : Parcelable {
     fun calculateElevationDifference(): Double = calculateElevationDifference(routePoints)
 
@@ -69,5 +72,19 @@ class RoomTypeConverters {
             )
         }
         return list
+    }
+
+    @TypeConverter
+    fun fromBitmap(bitmap: Bitmap?): ByteArray? {
+        if (bitmap == null) return null
+        val outputStream = java.io.ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+        return outputStream.toByteArray()
+    }
+
+    @TypeConverter
+    fun toBitmap(byteArray: ByteArray?): Bitmap? {
+        if (byteArray == null) return null
+        return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
     }
 }

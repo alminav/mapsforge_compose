@@ -22,11 +22,15 @@ import com.almica.mapsforge_compose.gh.HgtReader
 import com.almica.mapsforge_compose.externalData.MagentaCloudDownloader
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.launch
+import android.graphics.Bitmap
 import kotlinx.coroutines.withContext
 import org.mapsforge.core.model.LatLong
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import java.util.zip.ZipInputStream
 import kotlin.time.Duration.Companion.milliseconds
@@ -508,6 +512,44 @@ class MainViewModel(
             )
             db.tourDao().insertTour(newTour)
             Timber.i("Saved track: $name with ${points.size} points")
+        }
+    }
+
+    fun saveScreenshotToTourDatabase(bitmap: Bitmap, tourName: String?) {
+        if (tourName == null) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val tours = db.tourDao().getAllToursSync()
+                val tour = tours.find { it.name == tourName }
+                if (tour != null) {
+                    val updatedTour = tour.copy(thumbnail = bitmap)
+                    db.tourDao().insertTour(updatedTour)
+                    Timber.i("Updated thumbnail for tour: $tourName")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to save thumbnail to database for $tourName")
+            }
+        }
+    }
+
+    fun saveScreenshotToTour(bitmap: Bitmap, tourName: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                val sanitizedName = tourName?.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val fileName = if (!sanitizedName.isNullOrBlank()) "${sanitizedName}_$timeStamp.jpg" else "screenshot_$timeStamp.jpg"
+                val dir = externalFilesDir?.resolve("screenshots") ?: return@launch
+                if (!dir.exists()) {
+                    dir.mkdirs()
+                }
+                val file = File(dir, fileName)
+                FileOutputStream(file).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                }
+                Timber.i("Saved screenshot for tour $tourName to ${file.absolutePath}")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to save screenshot for tour $tourName")
+            }
         }
     }
 

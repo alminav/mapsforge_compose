@@ -12,6 +12,9 @@ interface TourDao {
     @Query("SELECT * FROM tours ORDER BY timestamp DESC")
     fun getAllTours(): Flow<List<TourEntity>>
 
+    @Query("SELECT * FROM tours ORDER BY timestamp DESC")
+    suspend fun getAllToursSync(): List<TourEntity>
+
     @Update
     suspend fun updateTour(tour: TourEntity): Int
 
@@ -19,7 +22,7 @@ interface TourDao {
     suspend fun deleteTour(tour: TourEntity): Int
 }
 
-@Database(entities = [TourEntity::class], version = 3, exportSchema = false)
+@Database(entities = [TourEntity::class], version = 4, exportSchema = false)
 @TypeConverters(RoomTypeConverters::class)
 abstract class TourDatabase : RoomDatabase() {
     abstract fun tourDao(): TourDao

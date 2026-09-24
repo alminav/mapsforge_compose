@@ -228,6 +228,12 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                     viewModel.calculateRoute(context, sLat, sLon, eLat, eLon)
                 },
+                onSaveScreenshotToTour = { bitmap, name ->
+                    if (name != null) {
+                        //viewModel.saveScreenshotToTour(bitmap, name)
+                        viewModel.saveScreenshotToTourDatabase(bitmap, name)
+                    }
+                },
                 onCalculateRoundtrip = { sLat, sLon, eLat, eLon ->
                     scope.launch {
                         snackbarHostState.currentSnackbarData?.dismiss()
@@ -551,7 +557,8 @@ fun MapViewContainer(
     onSettingsClick: () -> Unit,
     onCalculateRoute: (Double, Double, Double, Double) -> Unit,
     onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit,
-    onScreenshotSaved: (String) -> Unit
+    onScreenshotSaved: (String) -> Unit,
+    onSaveScreenshotToTour: (android.graphics.Bitmap, String?) -> Unit
 ) {
     val mapFile = remember(uiState.currentRegion, uiState.selectedMapFileName) {
         uiState.mapDir?.let { dir ->
@@ -584,6 +591,7 @@ fun MapViewContainer(
         followGps = uiState.followGps,
         onAddPoi = { label, desc, latLong -> onAddPoi(label, desc, latLong) },
         onScreenshotSaved = onScreenshotSaved,
+        onSaveScreenshotToTour = onSaveScreenshotToTour,
         mapControls = {
             MapControls(
                 isTrackingActive = uiState.isTrackingActive,
@@ -645,6 +653,7 @@ fun MapViewContainerContent(
     followGps: Boolean,
     onAddPoi: ((String, String?, LatLong) -> Unit)? = null,
     onScreenshotSaved: (String) -> Unit = {},
+    onSaveScreenshotToTour: (android.graphics.Bitmap, String?) -> Unit = { _, _ -> },
     mapControls: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -736,13 +745,17 @@ fun MapViewContainerContent(
                             captureMapViewAdvanced(mapView) { bitmap ->
                                 bitmap?.let { nonNullBitmap ->
                                     val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                                    val fileName = if (loadedTrackName != null)
-                                        loadedTrackName else
-                                    "screenshot_${timeStamp}"
-                                    saveBitmapToGallery(context, nonNullBitmap, fileName)
+                                    val fileName = loadedTrackName ?: "screenshot_${timeStamp}"
+
+                                    // Additionally store in the TourDatabase if a track is active/loaded
+                                    if (loadedTrackName != null || activeTrackPoints.isNotEmpty()) {
+                                        onSaveScreenshotToTour(nonNullBitmap, loadedTrackName)
+                                    } else
+                                        saveBitmapToGallery(context, nonNullBitmap, fileName)
+
                                     onScreenshotSaved(if (loadedTrackName != null)
                                         "Screenshot für $loadedTrackName gespeichert" else
-                                        "Screenshot gespeichert")
+                                        "Screenshot in Gallery gespeichert")
                                 }
                             }
                         }

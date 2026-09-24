@@ -9,12 +9,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.hardware.Sensor
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -30,6 +32,8 @@ import android.hardware.SensorManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +64,7 @@ enum class TourSortOption {
     DATE_DESC, NAME_ASC, DISTANCE_DESC, DISTANCE_ASC, PROXIMITY_ASC
 }
 
+// ToDo Anzeige mit/ohne Thumbnail
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TourHistoryScreen(
@@ -533,9 +538,28 @@ fun TourHistoryItem(
                     }
                     Text(text = stringResource(R.string.tour_points, tour.routePoints.size))
                 }
+                tour.thumbnail?.let { bitmap ->
+//                val bitmap = remember(byteArray) {
+//                    BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+//                }
+                    bitmap.let {
+                        androidx.compose.foundation.Image(
+                            bitmap = it.asImageBitmap(),
+                            contentDescription = "Tour Thumbnail",
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                                .size(164.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .padding(end = 12.dp),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    }
+                } ?: run {
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+
             }
 
-            Box {
+            Box(modifier = Modifier.align(Alignment.Top).padding(start = 8.dp)) {
                 IconButton(modifier = Modifier.padding(bottom = 24.dp), onClick = { expanded = true }) {
                     Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Options")
                 }
