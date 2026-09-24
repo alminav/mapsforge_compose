@@ -11,6 +11,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import com.almica.mapsforge_compose.gh.Const
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -242,6 +243,15 @@ fun MainScreen(viewModel: MainViewModel) {
                                 duration = SnackbarDuration.Short
                             )
                         }
+                    }
+                },
+                onScreenshotSaved = { msg ->
+                    scope.launch {
+                        snackbarHostState.currentSnackbarData?.dismiss()
+                        snackbarHostState.showSnackbar(
+                            message = msg,
+                            duration = SnackbarDuration.Short
+                        )
                     }
                 }
             )
@@ -540,7 +550,8 @@ fun MapViewContainer(
     onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onCalculateRoute: (Double, Double, Double, Double) -> Unit,
-    onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit
+    onCalculateRoundtrip: (Double, Double, Double, Double) -> Unit,
+    onScreenshotSaved: (String) -> Unit
 ) {
     val mapFile = remember(uiState.currentRegion, uiState.selectedMapFileName) {
         uiState.mapDir?.let { dir ->
@@ -557,6 +568,7 @@ fun MapViewContainer(
         gpsLocation = gpsLocation,
         loadedTrackPoints = uiState.loadedTrackPoints,
         activeTrackPoints = uiState.activeTrackPoints,
+        loadedTrackName = uiState.loadedTrackName,
         distanceMarkers = uiState.distanceMarkers + uiState.activeDistanceMarkers,
         pois = uiState.pois,
         onMove = { latLong -> onMove(latLong) },
@@ -570,6 +582,8 @@ fun MapViewContainer(
         targetPosition = uiState.targetPosition,
         zoomLevel = uiState.zoomLevel,
         followGps = uiState.followGps,
+        onAddPoi = { label, desc, latLong -> onAddPoi(label, desc, latLong) },
+        onScreenshotSaved = onScreenshotSaved,
         mapControls = {
             MapControls(
                 isTrackingActive = uiState.isTrackingActive,
@@ -621,6 +635,7 @@ fun MapViewContainerContent(
     activeTrackPoints: List<RoutePoint>,
     distanceMarkers: List<DistanceMarker> = emptyList(),
     pois: List<PoiEntity> = emptyList(),
+    loadedTrackName: String? = null,
     onMove: (LatLong) -> Unit,
     onZoomChanged: (Int) -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
@@ -628,10 +643,15 @@ fun MapViewContainerContent(
     targetPosition: LatLong?,
     zoomLevel: Int,
     followGps: Boolean,
+    onAddPoi: ((String, String?, LatLong) -> Unit)? = null,
+    onScreenshotSaved: (String) -> Unit = {},
     mapControls: @Composable () -> Unit
 ) {
+    val context = LocalContext.current
     val mapViewReference = remember { mutableStateOf<MapView?>(null) }
     var isMoving by remember { mutableStateOf(false) }
+    var showCrosshairMenu by remember { mutableStateOf(false) }
+    var showCrosshairAddPoiDialog by remember { mutableStateOf(false) }
     //Timber.i("mapFile: ${mapFile?.path}")
     // Detect movement to show crosshair when not following GPS
     LaunchedEffect(targetPosition) {
@@ -682,23 +702,98 @@ fun MapViewContainerContent(
             followGps = followGps,
             state = mapState,
             onMapViewReady = { mv ->
-
                 mapViewReference.value = mv
             },
             onCenterChanged = onMove,
             onZoomChanged = onZoomChanged,
             onPoiClick = onPoiClick,
-            onFollowGpsChanged = onFollowGpsChanged
+            onFollowGpsChanged = onFollowGpsChanged,
+            onMapMoved = {
+                isMoving = true
+            }
         )
 
         // Crosshair overlay
-        AnimatedVisibility(
-            visible = isMoving,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.Center)
-        ) {
-            MapCrosshair()
+        Box(modifier = Modifier.align(Alignment.Center)) {
+            AnimatedVisibility(
+                visible = isMoving,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                MapCrosshair(
+                    onClick = { showCrosshairMenu = true }
+                )
+            }
+            DropdownMenu(
+                expanded = showCrosshairMenu,
+                onDismissRequest = { showCrosshairMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Screenshot speichern") },
+                    onClick = {
+                        showCrosshairMenu = false
+                        mapViewReference.value?.let { mapView ->
+                            captureMapViewAdvanced(mapView) { bitmap ->
+                                bitmap?.let { nonNullBitmap ->
+                                    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                                    val fileName = if (loadedTrackName != null)
+                                        loadedTrackName else
+                                    "screenshot_${timeStamp}"
+                                    saveBitmapToGallery(context, nonNullBitmap, fileName)
+                                    onScreenshotSaved(if (loadedTrackName != null)
+                                        "Screenshot für $loadedTrackName gespeichert" else
+                                        "Screenshot gespeichert")
+                                }
+                            }
+                        }
+                    },
+                    leadingIcon = { Icon(Icons.Default.Save, contentDescription = null) }
+                )
+                if (targetPosition != null && onAddPoi != null) {
+                    DropdownMenuItem(
+                        text = { Text("POI hinzufügen") },
+                        onClick = {
+                            showCrosshairMenu = false
+                            showCrosshairAddPoiDialog = true
+                        },
+                        leadingIcon = { Icon(Icons.Default.AddLocation, contentDescription = null) }
+                    )
+                }
+            }
+
+            if (showCrosshairAddPoiDialog && targetPosition != null && onAddPoi != null) {
+                var poiLabel by remember { mutableStateOf("") }
+                AlertDialog(
+                    onDismissRequest = { showCrosshairAddPoiDialog = false },
+                    title = { Text("POI hinzufügen") },
+                    text = {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            TextField(
+                                value = poiLabel,
+                                onValueChange = { poiLabel = it },
+                                placeholder = { Text("Name des POI") },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.titleLarge
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (poiLabel.isNotBlank()) {
+                                onAddPoi(poiLabel, null, targetPosition)
+                                showCrosshairAddPoiDialog = false
+                            }
+                        }) {
+                            Text("Hinzufügen")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCrosshairAddPoiDialog = false }) {
+                            Text("Abbrechen")
+                        }
+                    }
+                )
+            }
         }
 
         // Zoom Buttons
@@ -1447,8 +1542,15 @@ fun MapStateItem(
 }
 
 @Composable
-fun MapCrosshair(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(40.dp)) {
+fun MapCrosshair(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
+) {
+    Canvas(
+        modifier = modifier
+            .size(40.dp)
+            .clickable { onClick() }
+    ) {
         val strokeWidth = 2.dp.toPx()
         val color = Color.Black.copy(alpha = 0.7f)
         
@@ -1504,6 +1606,7 @@ fun MainScreenPreview() {
                 ),
                 activeTrackPoints = emptyList(),
                 distanceMarkers = emptyList(),
+                loadedTrackName = "Loaded Track",
                 onMove = {},
                 onZoomChanged = {},
                 onPoiClick = {},

@@ -1,7 +1,19 @@
 package com.almica.mapsforge_compose
 
 //import org.mapsforge.map.rendertheme.InternalRenderTheme
+import android.app.Activity
+import android.content.ContentValues
+import android.content.Context
+import android.content.ContextWrapper
+import android.graphics.Rect
+import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
 import android.view.MotionEvent
+import android.view.PixelCopy
+import android.view.Window
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -33,6 +45,11 @@ import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.ExternalRenderTheme
 import timber.log.Timber
 import java.io.File
+import androidx.core.graphics.createBitmap
+import java.io.OutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 @Stable
@@ -60,13 +77,15 @@ fun MapsforgeMapView(
     onCenterChanged: (LatLong) -> Unit = {},
     onZoomChanged: (Int) -> Unit = {},
     onPoiClick: (PoiEntity) -> Unit = {},
-    onFollowGpsChanged: (Boolean) -> Unit = {}
+    onFollowGpsChanged: (Boolean) -> Unit = {},
+    onMapMoved: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val currentOnCenterChanged by rememberUpdatedState(onCenterChanged)
     val currentOnZoomChanged by rememberUpdatedState(onZoomChanged)
     val currentOnPoiClick by rememberUpdatedState(onPoiClick)
     val currentOnFollowGpsChanged by rememberUpdatedState(onFollowGpsChanged)
+    val currentOnMapMoved by rememberUpdatedState(onMapMoved)
     val currentFollowGps by rememberUpdatedState(followGps)
 
     var lastViewCenter by remember { mutableStateOf<LatLong?>(null) }
@@ -101,6 +120,7 @@ fun MapsforgeMapView(
                     }
                     if (event.action == MotionEvent.ACTION_UP) {
                         view.performClick()
+                        currentOnMapMoved()
                     }
                     false
                 }
@@ -498,6 +518,115 @@ private fun createPoiMarker(poi: PoiEntity, zoomLevel: Int, onPoiClick: (PoiEnti
     canvas.drawCircle(center.toInt(), center.toInt(), radius + 1, outerBorderPaint)
     
     return PoiMarker(LatLong(poi.latitude, poi.longitude), bitmap, poi, 0, 0, onPoiClick, mapView)
+}
+
+fun Context.findActivity(): Activity? {
+    var context = this
+    while (context is ContextWrapper) {
+        if (context is Activity) return context
+        context = context.baseContext
+    }
+    return null
+}
+
+fun captureMapViewAdvanced(
+    mapView: MapView,
+    onBitmapCaptured: (android.graphics.Bitmap?) -> Unit = {}
+) {
+    val activity = mapView.context.findActivity()
+    if (activity != null) {
+        captureMapViewAdvanced(mapView, activity.window, onBitmapCaptured)
+    } else {
+        onBitmapCaptured(null)
+    }
+}
+
+fun captureMapViewAdvanced(
+    mapView: MapView,
+    window: Window,
+    onBitmapCaptured: (android.graphics.Bitmap?) -> Unit
+) {
+    // Moderne und sichere Variante via PixelCopy ab API 26
+    try {
+        val bitmap = createBitmap(mapView.width, mapView.height)
+
+        // Ermittle die genaue Position der MapView auf dem Bildschirm
+        val locationOfViewInWindow = IntArray(2)
+        mapView.getLocationInWindow(locationOfViewInWindow)
+
+        val xCoordinate = locationOfViewInWindow[0]
+        val yCoordinate = locationOfViewInWindow[1]
+
+        val scopeRect = Rect(
+            xCoordinate,
+            yCoordinate,
+            xCoordinate + mapView.width,
+            yCoordinate + mapView.height
+        )
+
+        // PixelCopy startet die Kopie direkt aus dem Hardware-Window-Buffer
+        PixelCopy.request(
+            window,
+            scopeRect,
+            bitmap,
+            { copyResult ->
+                if (copyResult == PixelCopy.SUCCESS) {
+                    onBitmapCaptured(bitmap)
+                } else {
+                    onBitmapCaptured(null) // Fehler bei der Kopie
+                }
+            },
+            Handler(Looper.getMainLooper())
+        )
+    } catch (e: Exception) {
+        e.printStackTrace()
+        onBitmapCaptured(null)
+    }
+}
+
+fun saveBitmapToGallery(context: Context, bitmap: android.graphics.Bitmap, displayName: String): Uri? {
+    val contentResolver = context.contentResolver
+    val imageDetails = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, "$displayName.jpg")
+        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+
+        // Ab Android 10 (Q) nutzen wir das kontrollierte Verzeichnis
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/RouteScreenshots")
+            put(MediaStore.Images.Media.IS_PENDING, 1) // Signalisiert, dass die Datei noch geschrieben wird
+        }
+    }
+
+    val collectionUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    } else {
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+    }
+
+    val fileUri = contentResolver.insert(collectionUri, imageDetails) ?: return null
+
+    try {
+        val outputStream: OutputStream? = contentResolver.openOutputStream(fileUri)
+        outputStream.use { stream ->
+            if (stream != null) {
+                // Bitmap komprimieren und in den Stream schreiben
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, stream)
+            }
+        }
+
+        // Exklusiven Zugriff aufheben, sobald die Datei fertig geschrieben ist
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            imageDetails.clear()
+            imageDetails.put(MediaStore.Images.Media.IS_PENDING, 0)
+            contentResolver.update(fileUri, imageDetails, null, null)
+        }
+        return fileUri
+    } catch (e: Exception) {
+        e.printStackTrace()
+        // Fehlgeschlagene Datei-Einträge bereinigen
+        contentResolver.delete(fileUri, null, null)
+        return null
+    }
 }
 
 @Preview(showBackground = true)
