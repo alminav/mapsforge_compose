@@ -480,6 +480,13 @@ class MainViewModel(
         ) }
     }
 
+    fun reverseLoadedTrack() {
+        val currentPoints = _uiState.value.loadedTrackPoints
+        if (currentPoints.isNotEmpty()) {
+            setLoadedTrackPoints(currentPoints.reversed())
+        }
+    }
+
     fun setLoadedTrackName(name: String?) {
         _uiState.update { it.copy(loadedTrackName = name) }
     }

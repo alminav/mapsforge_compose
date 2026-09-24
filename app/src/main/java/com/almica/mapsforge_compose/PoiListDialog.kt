@@ -39,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -66,6 +67,7 @@ enum class PoiSortOrder { NAME, DISTANCE }
 fun PoiListDialog(
     pois: List<PoiEntity>,
     onDismiss: () -> Unit,
+    onConfirm: (GhHelper.Locomotion) -> Unit,
     onPoiClick: (PoiEntity) -> Unit,
     onDeletePoi: (PoiEntity) -> Unit,
     onCalculateRoute: (Double, Double, GhHelper.Locomotion) -> Unit,
@@ -104,6 +106,18 @@ fun PoiListDialog(
         }
     }
 
+    val context = LocalContext.current
+    val initialVehicleIndex = remember(context, isPreview) {
+        if (isPreview) 0
+        else {
+            val currentKey = SettingsRepository(context).getLocomotionKey()
+            GhHelper.Locomotion.entries.indexOfFirst {
+                it.key.equals(currentKey, ignoreCase = true)
+            }.coerceAtLeast(0)
+        }
+    }
+    var selectedVehicleIndex by remember { mutableIntStateOf(initialVehicleIndex) }
+
     if (isPreview) {
         Surface(
             modifier = Modifier.padding(16.dp),
@@ -127,7 +141,9 @@ fun PoiListDialog(
                     onCalculateRoute = onCalculateRoute,
                     onCalculateRoundtrip = onCalculateRoundtrip,
                     onShowWeather = onShowWeather,
-                    isPreview = isPreview
+                    isPreview = isPreview,
+                    selectedVehicleIndex = selectedVehicleIndex,
+                    onVehicleIndexChange = { selectedVehicleIndex = it }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
@@ -156,12 +172,27 @@ fun PoiListDialog(
                     onCalculateRoute = onCalculateRoute,
                     onCalculateRoundtrip = onCalculateRoundtrip,
                     onShowWeather = onShowWeather,
-                    isPreview = isPreview
+                    isPreview = isPreview,
+                    selectedVehicleIndex = selectedVehicleIndex,
+                    onVehicleIndexChange = { selectedVehicleIndex = it }
                 )
             },
-            confirmButton = {
+            dismissButton = {
                 TextButton(onClick = onDismiss) {
                     Text(stringResource(R.string.action_close))
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val vehicles = GhHelper.Locomotion.entries
+                        if (selectedVehicleIndex in vehicles.indices) {
+                            onConfirm(vehicles[selectedVehicleIndex])
+                        }
+                        onDismiss()
+                    }
+                ) {
+                    Text(stringResource(android.R.string.ok))
                 }
             }
         )
@@ -180,7 +211,9 @@ private fun PoiListContent(
     onCalculateRoute: (Double, Double, GhHelper.Locomotion) -> Unit,
     onCalculateRoundtrip: (Double, Double, GhHelper.Locomotion) -> Unit,
     onShowWeather: (PoiEntity) -> Unit,
-    isPreview: Boolean
+    isPreview: Boolean,
+    selectedVehicleIndex: Int,
+    onVehicleIndexChange: (Int) -> Unit
 ) {
     Column {
         Row(
@@ -225,14 +258,6 @@ private fun PoiListContent(
         if (sortedPois.isEmpty()) {
             Text(stringResource(R.string.poi_list_empty))
         } else {
-            val context = LocalContext.current
-            val initialVehicleIndex = remember(context) {
-                val currentKey = SettingsRepository(context).getLocomotionKey()
-                GhHelper.Locomotion.entries.indexOfFirst {
-                    it.key.equals(currentKey, ignoreCase = true)
-                }.coerceAtLeast(0)
-            }
-            var selectedVehicleIndex by remember { mutableStateOf(initialVehicleIndex) }
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)
             ) {
@@ -269,8 +294,8 @@ private fun PoiListContent(
                             Timber.i("Showing weather for ${poi.label} at ${poi.latitude}, ${poi.longitude}")
                             onShowWeather(poi)
                         },
-                        selectedIndex = selectedVehicleIndex,
-                        onIndexChange = { selectedVehicleIndex = it }
+                        selectedVehicleIndex = selectedVehicleIndex,
+                        onVehicleIndexChange = onVehicleIndexChange
                     )
                 }
             }
@@ -286,22 +311,22 @@ fun PoiListItem(
     onCalculate: (GhHelper.Locomotion) -> Unit,
     onRoundtrip: (GhHelper.Locomotion) -> Unit,
     onShowWeather: () -> Unit,
-    selectedIndex: Int,
-    onIndexChange: (Int) -> Unit,
+    selectedVehicleIndex: Int,
+    onVehicleIndexChange: (Int) -> Unit,
     distance: Float? = null
 ) {
     val vehicles = GhHelper.Locomotion.entries
-    val localPagerState = rememberPagerState(initialPage = selectedIndex, pageCount = { vehicles.size })
+    val localPagerState = rememberPagerState(initialPage = selectedVehicleIndex, pageCount = { vehicles.size })
 
-    LaunchedEffect(selectedIndex) {
-        if (localPagerState.currentPage != selectedIndex) {
-            localPagerState.scrollToPage(selectedIndex)
+    LaunchedEffect(selectedVehicleIndex) {
+        if (localPagerState.currentPage != selectedVehicleIndex) {
+            localPagerState.scrollToPage(selectedVehicleIndex)
         }
     }
 
     LaunchedEffect(localPagerState.currentPage) {
-        if (localPagerState.currentPage != selectedIndex) {
-            onIndexChange(localPagerState.currentPage)
+        if (localPagerState.currentPage != selectedVehicleIndex) {
+            onVehicleIndexChange(localPagerState.currentPage)
         }
     }
 
@@ -375,7 +400,7 @@ fun PoiListItem(
                 }
             }
 
-            IconButton(onClick = { onCalculate(vehicles[selectedIndex]) }) {
+            IconButton(onClick = { onCalculate(vehicles[selectedVehicleIndex]) }) {
                 Icon(
                     imageVector = Icons.Default.Navigation,
                     contentDescription = stringResource(R.string.poi_action_navigate),
@@ -383,7 +408,7 @@ fun PoiListItem(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(onClick = { onRoundtrip(vehicles[selectedIndex]) }) {
+            IconButton(onClick = { onRoundtrip(vehicles[selectedVehicleIndex]) }) {
                 Icon(
                     imageVector = Icons.Default.TripOrigin,
                     contentDescription = stringResource(R.string.poi_action_roundtrip),
@@ -426,6 +451,7 @@ fun PoiListDialogPreview() {
         PoiListDialog(
             pois = samplePois,
             onDismiss = {},
+            onConfirm = {},
             onPoiClick = {},
             onDeletePoi = {},
             onCalculateRoute = { _, _, _ -> },
@@ -455,8 +481,8 @@ fun PoiListItemPreview() {
             onCalculate = {},
             onRoundtrip = {},
             onShowWeather = {},
-            selectedIndex = selectedIndex,
-            onIndexChange = { selectedIndex = it },
+            selectedVehicleIndex = selectedIndex,
+            onVehicleIndexChange = { selectedIndex = it },
             distance = 1200f
         )
     }

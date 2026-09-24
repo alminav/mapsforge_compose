@@ -35,7 +35,7 @@ class LocationClient(private val context: Context) {
                         Timber.i("mslAltitudeMeters: ${loc.mslAltitudeMeters}")
                         loc.mslAltitudeMeters
                     } else {
-                        Timber.i("hasMslAltitude: false")
+                        //Timber.i("hasMslAltitude: false")
                         null
                     }
                     

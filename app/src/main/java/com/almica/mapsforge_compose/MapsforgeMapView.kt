@@ -348,6 +348,9 @@ private fun createDistanceMarkerOverlay(
     if (hasLoadedTrack && dm.isActive) {
         return null
     }
+    if (dm.isActive && zoomLevel < 11) {
+        return null
+    }
 
     val radius = (zoomLevel * 1.8f).toInt().coerceIn(20, 56)
     val size = radius * 2 + 12

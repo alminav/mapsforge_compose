@@ -40,6 +40,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Tour
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -184,6 +186,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     // Note: We'll need to handle the selection logic in the tourHistoryScreen block
                     // By checking a state or passing a specific callback
                     viewModel.setIsAppending(true)
+                },
+                onRouteReverse = {
+                    viewModel.reverseLoadedTrack()
                 },
                 onShowGradientChart = { showGradientChart = true },
                 onShowElevationChart = { showElevationChart = true },
@@ -525,6 +530,7 @@ fun MapViewContainer(
     onSaveTrack: (String) -> Unit,
     onClearTrack: () -> Unit,
     onRouteAppend: () -> Unit,
+    onRouteReverse: () -> Unit,
     onShowGradientChart: () -> Unit,
     onShowElevationChart: () -> Unit,
     onShowActiveElevationChart: () -> Unit,
@@ -589,7 +595,8 @@ fun MapViewContainer(
                 onToggleFollowGps = onToggleFollowGps,
                 onSaveTrack = onSaveTrack,
                 onClearTrack = onClearTrack,
-                omRouteAppend = onRouteAppend,
+                onRouteAppend = onRouteAppend,
+                onRouteReverse = onRouteReverse,
                 onShowGradientChart = onShowGradientChart,
                 onShowElevationChart = onShowElevationChart,
                 onHistoryClick = onHistoryClick,
@@ -789,7 +796,8 @@ fun MapControls(
     onToggleFollowGps: () -> Unit,
     onSaveTrack: (String) -> Unit,
     onClearTrack: () -> Unit,
-    omRouteAppend: () -> Unit,
+    onRouteAppend: () -> Unit,
+    onRouteReverse: () -> Unit,
     onShowGradientChart: () -> Unit,
     onShowElevationChart: () -> Unit,
     onHistoryClick: () -> Unit,
@@ -990,6 +998,8 @@ fun MapControls(
             onShowWeather = { poi ->
                 selectedWeatherPoi = poi
                 showPoiListDialog = false
+            }, onConfirm = {vehicle ->
+                mainViewModel.selectLocomotion(vehicle.key)
             }
         )
     }
@@ -1099,11 +1109,20 @@ fun MapControls(
         onShowActiveElevationChart = onShowActiveElevationChart,
         onShowActiveSpeedChart = onShowActiveSpeedChart,
         onSearchClick = onSearchClick,
-        omRouteAppend = omRouteAppend,
+        onRouteAppend = onRouteAppend,
+        onRouteReverse = onRouteReverse,
         mapCenter = currentMapCenter,
         onMagentaMap = {
             showMapState = it
-            Timber.i("onMagentaMap: $it") }
+            Timber.i("onMagentaMap: $it") },
+        onNavigateToTarget = {
+            (currentLocation?.let { LatLong(it.latitude, it.longitude) }
+                ?: currentMapCenter)?.let { start ->
+                val target = uiState.loadedTrackPoints.last()
+                onCalculateRoute(start.latitude, start.longitude, target.latitude, target.longitude)
+                showPoiListDialog = false
+            }
+        }
     )
 }
 
@@ -1123,13 +1142,15 @@ fun MapControlsContent(
     onPoiListClick: () -> Unit,
     onSaveTrackClick: () -> Unit,
     onShowGradientChart: () -> Unit,
-    omRouteAppend: () -> Unit,
+    onRouteAppend: () -> Unit,
+    onRouteReverse: () -> Unit,
     onShowElevationChart: () -> Unit,
     onShowActiveElevationChart: () -> Unit,
     onShowActiveSpeedChart: () -> Unit,
     onSearchClick: () -> Unit,
     mapCenter: LatLong?,
-    onMagentaMap: (String?) -> Unit
+    onMagentaMap: (String?) -> Unit,
+    onNavigateToTarget: () -> Unit
 ) {
     val tileName = getTileName(mapCenter?.latitude ?: 0.0, mapCenter?.longitude ?: 0.0)
     //Timber.i("tileName: $tileName")
@@ -1207,6 +1228,16 @@ fun MapControlsContent(
                     },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
                 )
+                if (hasTrack) {
+                    DropdownMenuItem(
+                        text = { Text("Navigate to target") },
+                        onClick = {
+                            showPoiMenu = false
+                            onNavigateToTarget()
+                        },
+                        leadingIcon = { Icon(Icons.Default.Tour, contentDescription = null) }
+                    )
+                }
                 if (magentaMap != null) {
                     DropdownMenuItem(
                         text = { Text(tileName.lowercase()) },
@@ -1287,9 +1318,16 @@ fun MapControlsContent(
                     DropdownMenuItem(
                         text = { Text("Route Append") },
                         onClick = {
-                            omRouteAppend()
+                            onRouteAppend()
                             showTrackMenu = false  },
                         leadingIcon = { Icon(Icons.Default.ExpandMore, contentDescription = null) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Route Reverse") },
+                        onClick = {
+                            onRouteReverse()
+                            showTrackMenu = false  },
+                        leadingIcon = { Icon(Icons.Default.Repeat, contentDescription = null) }
                     )
                 }
             }
@@ -1494,13 +1532,15 @@ fun MainScreenPreview() {
                         onPoiListClick = {},
                         onSaveTrackClick = {},
                         onShowGradientChart = {},
-                        omRouteAppend = {},
+                        onRouteAppend = {},
+                        onRouteReverse = {},
                         onShowElevationChart = {},
                         onShowActiveElevationChart = {},
                         onShowActiveSpeedChart = {},
                         onSearchClick = {},
                         mapCenter = LatLong(52.5200, 13.4050),
-                        onMagentaMap = {}
+                        onMagentaMap = {},
+                        onNavigateToTarget = {}
                     )
                 }
             )
