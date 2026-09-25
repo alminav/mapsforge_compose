@@ -1,64 +1,110 @@
 package com.almica.mapsforge_compose
 
-import androidx.activity.compose.rememberLauncherForActivityResult
+import android.content.Context
+import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Close
-import android.content.Context
-import android.content.Intent
-import android.graphics.BitmapFactory
-import android.hardware.Sensor
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.CleaningServices
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import android.hardware.SensorManager
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.mapsforge.core.model.LatLong
-import java.text.SimpleDateFormat
-import java.util.*
-import androidx.compose.ui.platform.LocalResources
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Polyline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.core.net.toUri
+import com.almica.mapsforge_compose.TourUtils.refreshRouteElevationFromSrtm
 import com.almica.mapsforge_compose.TourUtils.simplifyToTargetCount
 import com.almica.mapsforge_compose.charts.Const
 import com.almica.mapsforge_compose.charts.ElevationChart
 import com.almica.mapsforge_compose.charts.GradientChart
 import com.almica.mapsforge_compose.charts.SpeedChart
-import androidx.compose.material.icons.filled.Speed
-import com.almica.mapsforge_compose.TourUtils.refreshRouteElevationFromSrtm
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.mapsforge.core.model.LatLong
 import timber.log.Timber
-import androidx.compose.ui.platform.LocalLocale
-import androidx.core.net.toUri
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class TourSortOption {
     DATE_DESC, NAME_ASC, DISTANCE_DESC, DISTANCE_ASC, PROXIMITY_ASC
@@ -493,7 +539,7 @@ fun TourHistoryItem(
     val dateString = remember(tour.timestamp) {
         SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(tour.timestamp))
     }
-
+    var scaleFactor by remember { mutableFloatStateOf(1f) }
     var expanded by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
 
@@ -513,7 +559,8 @@ fun TourHistoryItem(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 if (!tour.name.isNullOrEmpty()) {
-                    Text(text = tour.name, style = MaterialTheme.typography.titleMedium)
+                    Text(text = tour.name.replace(Const.KML_EXT, "").replace(Const.GPX_EXT, ""),
+                        style = MaterialTheme.typography.titleMedium)
                     Text(text = dateString, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     Text(text = dateString, style = MaterialTheme.typography.titleMedium)
@@ -521,8 +568,7 @@ fun TourHistoryItem(
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     val distanceResId = when {
                         tour.totalDistanceKm > 100.0 -> R.string.tour_distance_0
@@ -539,20 +585,25 @@ fun TourHistoryItem(
                     Text(text = stringResource(R.string.tour_points, tour.routePoints.size))
                 }
                 tour.thumbnail?.let { bitmap ->
-//                val bitmap = remember(byteArray) {
-//                    BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
-//                }
-                    bitmap.let {
-                        androidx.compose.foundation.Image(
-                            bitmap = it.asImageBitmap(),
-                            contentDescription = "Tour Thumbnail",
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                                .size(164.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .padding(end = 12.dp),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                    }
+                    val animatedSize by animateDpAsState(
+                        targetValue = (scaleFactor * 64).dp,
+                        label = "ThumbnailSizeAnimation"
+                    )
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Tour Thumbnail",
+                        modifier = Modifier.fillMaxWidth()
+                            .size(animatedSize)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(
+                                onClickLabel = "Zoom thumbnail",
+                                onClick = {
+                                    scaleFactor = if (scaleFactor < 4f) scaleFactor + 1f else 1f
+                                }
+                            )
+                            .padding(end = 12.dp),
+                        contentScale = ContentScale.Crop
+                    )
                 } ?: run {
                     Spacer(modifier = Modifier.width(4.dp))
                 }

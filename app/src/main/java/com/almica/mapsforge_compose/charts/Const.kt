@@ -24,6 +24,9 @@ class Const {
         const val TIME_PATTERN_LONG: String = "yyMMdd_HHmmss"
         const val GMS_TAG: String = "gms"
         const val TXT_EXT: String = ".txt"
+        const val KML_EXT: String = ".kml"
+        const val GPX_EXT: String = ".gpx"
     }
+
 }
 

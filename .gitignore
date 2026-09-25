@@ -16,3 +16,7 @@ local.properties
 .artifacts/
 .gradle/
 .kotlin/
+/graphhopper/
+/backups/
+/composecharts/
+secrets.xml
