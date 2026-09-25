@@ -592,7 +592,7 @@ fun TourHistoryItem(
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = "Tour Thumbnail",
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
                             .size(animatedSize)
                             .clip(RoundedCornerShape(8.dp))
                             .clickable(
@@ -600,8 +600,7 @@ fun TourHistoryItem(
                                 onClick = {
                                     scaleFactor = if (scaleFactor < 4f) scaleFactor + 1f else 1f
                                 }
-                            )
-                            .padding(end = 12.dp),
+                            ),
                         contentScale = ContentScale.Crop
                     )
                 } ?: run {
