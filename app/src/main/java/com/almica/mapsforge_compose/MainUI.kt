@@ -40,6 +40,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Tour
@@ -658,9 +659,12 @@ fun MapViewContainerContent(
 ) {
     val context = LocalContext.current
     val mapViewReference = remember { mutableStateOf<MapView?>(null) }
+    val scope = rememberCoroutineScope()
     var isMoving by remember { mutableStateOf(false) }
     var showCrosshairMenu by remember { mutableStateOf(false) }
     var showCrosshairAddPoiDialog by remember { mutableStateOf(false) }
+    var selectedWeatherPoi by rememberSaveable { mutableStateOf<PoiEntity?>(null) }
+    var isTakingScreenshot by remember { mutableStateOf(false) }
     //Timber.i("mapFile: ${mapFile?.path}")
     // Detect movement to show crosshair when not following GPS
     LaunchedEffect(targetPosition) {
@@ -741,22 +745,30 @@ fun MapViewContainerContent(
                     text = { Text("Screenshot speichern") },
                     onClick = {
                         showCrosshairMenu = false
-                        mapViewReference.value?.let { mapView ->
-                            captureMapViewAdvanced(mapView) { bitmap ->
-                                bitmap?.let { nonNullBitmap ->
-                                    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                                    val fileName = loadedTrackName ?: "screenshot_${timeStamp}"
+                        isTakingScreenshot = true
+                        scope.launch {
+                            delay(50.milliseconds) // brief delay to allow zoom buttons to disappear
+                            val mapView = mapViewReference.value
+                            if (mapView != null) {
+                                captureMapViewAdvanced(mapView) { bitmap ->
+                                    isTakingScreenshot = false
+                                    bitmap?.let { nonNullBitmap ->
+                                        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                                        val fileName = loadedTrackName ?: "screenshot_${timeStamp}"
 
-                                    // Additionally store in the TourDatabase if a track is active/loaded
-                                    if (loadedTrackName != null || activeTrackPoints.isNotEmpty()) {
-                                        onSaveScreenshotToTour(nonNullBitmap, loadedTrackName)
-                                    } else
-                                        saveBitmapToGallery(context, nonNullBitmap, fileName)
+                                        // Additionally store in the TourDatabase if a track is active/loaded
+                                        if (loadedTrackName != null || activeTrackPoints.isNotEmpty()) {
+                                            onSaveScreenshotToTour(nonNullBitmap, loadedTrackName)
+                                        } else
+                                            saveBitmapToGallery(context, nonNullBitmap, fileName)
 
-                                    onScreenshotSaved(if (loadedTrackName != null)
-                                        "Screenshot für $loadedTrackName gespeichert" else
-                                        "Screenshot in Gallery gespeichert")
+                                        onScreenshotSaved(if (loadedTrackName != null)
+                                            "Screenshot für $loadedTrackName gespeichert" else
+                                            "Screenshot in Gallery gespeichert")
+                                    }
                                 }
+                            } else {
+                                isTakingScreenshot = false
                             }
                         }
                     },
@@ -770,6 +782,16 @@ fun MapViewContainerContent(
                             showCrosshairAddPoiDialog = true
                         },
                         leadingIcon = { Icon(Icons.Default.AddLocation, contentDescription = null) }
+                    )
+                }
+                if (targetPosition != null) {
+                    DropdownMenuItem(
+                        text = { Text("Weather") },
+                        onClick = {
+                            showCrosshairMenu = false
+                            selectedWeatherPoi = PoiEntity(label = "Weather", latitude = targetPosition.latitude, longitude = targetPosition.longitude)
+                        },
+                        leadingIcon = { Icon(Icons.Default.CloudQueue, contentDescription = null) }
                     )
                 }
             }
@@ -810,29 +832,61 @@ fun MapViewContainerContent(
         }
 
         // Zoom Buttons
-        Column(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SmallFloatingActionButton(
-                onClick = {
-                    val newZoom = (mapState.zoomLevel + 1).coerceAtMost(22)
-                    onZoomChanged(newZoom)
-                }
+        if (!isTakingScreenshot) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.zoom_in))
-            }
-            SmallFloatingActionButton(
-                onClick = {
-                    val newZoom = (mapState.zoomLevel - 1).coerceAtLeast(3)
-                    onZoomChanged(newZoom)
+                SmallFloatingActionButton(
+                    onClick = {
+                        val newZoom = (mapState.zoomLevel + 1).coerceAtMost(22)
+                        onZoomChanged(newZoom)
+                    }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.zoom_in))
                 }
-            ) {
-                Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
+                SmallFloatingActionButton(
+                    onClick = {
+                        val newZoom = (mapState.zoomLevel - 1).coerceAtLeast(3)
+                        onZoomChanged(newZoom)
+                    }
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.zoom_out))
+                }
             }
         }
+
+        selectedWeatherPoi?.let { poi ->
+            AlertDialog(
+                onDismissRequest = { selectedWeatherPoi = null },
+                confirmButton = {
+                    TextButton(onClick = { selectedWeatherPoi = null }) {
+                        Text(stringResource(R.string.action_close))
+                    }
+                },
+                title = {
+                    Text(
+                        poi.label,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                text = {
+                    WeatherScreen(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(420.dp)
+                            .verticalScroll(rememberScrollState()),
+                        latitude = poi.latitude,
+                        longitude = poi.longitude
+                    )
+                }
+            )
+        }
+
         mapControls()
     }
 }
