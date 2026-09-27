@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Standort senden</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:disabled { background: #6c757d; }
+        #status { margin-top: 20px; font-weight: bold; color: #333; }
+    </style>
+</head>
+<body>
+
+    <h2>Standort an bplaced-Datenbank senden</h2>
+    <p>Klicke auf den Button, um deine aktuelle GPS-Position zu ermitteln und zu speichern.</p>
+    
+    <button id="geoBtn">Standort senden</button>
+    <div id="status">Bereit.</div>
+
+    <script>
+        document.getElementById('geoBtn').addEventListener('click', function() {
+            const statusDiv = document.getElementById('status');
+            const btn = this;
+
+
+            statusDiv.innerText = "Ermittle Standort...";
+            statusDiv.style.color = "orange";
+            btn.disabled = true;
+
+        const lat = 52.2;
+        const lon = 10.3;
+		const alt = 72.2;
+		const temp = 23.5;
+
+        // Daten per POST an das bplaced-Skript senden
+        const formData = new FormData();
+        formData.append('title', 'Mein aktueller Standort');
+        formData.append('latitude', lat);
+        formData.append('longitude', lon);
+		formData.append('altitude', alt);
+		formData.append('temperature', temp);
+		statusDiv.innerText = String(lat);
+		
+        fetch('location.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => console.log(response.json()))
+        .catch(error => console.error('Fehler:', error));
+        });
+    </script>
+</body>
+</html>
