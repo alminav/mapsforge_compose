@@ -2,83 +2,87 @@ package com.almica.mapsforge_compose
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import com.almica.mapsforge_compose.gh.Const
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddLocation
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CloudQueue
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.LineAxis
+import androidx.compose.material.icons.filled.LocationDisabled
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tour
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.material3.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.LocationDisabled
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.AddLocation
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.LineAxis
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.CloudQueue
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Tour
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.almica.mapsforge_compose.charts.ChartViewModel
 import com.almica.mapsforge_compose.charts.DataPoint
 import com.almica.mapsforge_compose.charts.ElevationChart
-import com.almica.mapsforge_compose.charts.ChartViewModel
 import com.almica.mapsforge_compose.charts.GradientChart
 import com.almica.mapsforge_compose.charts.RouteEntity
 import com.almica.mapsforge_compose.charts.SpeedChart
 import com.almica.mapsforge_compose.charts.toKmlString
 import com.almica.mapsforge_compose.externalData.MagentaCloud
+import com.almica.mapsforge_compose.gh.Const
 import com.almica.mapsforge_compose.gh.GhHelper.Locomotion
 import com.almica.mapsforge_compose.gh.HgtReader.Companion.getTileName
 import com.almica.mapsforge_compose.gh.RoundtripValuePickerDialog
 import com.almica.mapsforge_compose.gh.getTileRect
 import com.almica.mapsforge_compose.weather.WeatherScreen
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.view.MapView
-import com.google.android.gms.maps.model.LatLng
 import timber.log.Timber
 import java.io.File
-import kotlin.time.Duration.Companion.milliseconds
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
+
 
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
@@ -1084,9 +1088,31 @@ fun MapControls(
                     )
                 }
             },
-            confirmButton = {
+            dismissButton = {
                 TextButton(onClick = { showMapState = null }) {
                     Text(stringResource(R.string.action_close))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMapState = null
+                    val encodedTileName = Uri.encode(stateTileName)
+                    // geo:52.435,10.456?q=52.435,10.456(Mein+Label) ----- diese variante ignoriert den zoom level z=
+                    val mapIntentUri =
+                        tileCenter?.let { "geo:${it.latitude},${it.longitude}?q=${it.latitude},${it.longitude}($encodedTileName)" }
+                            ?.toUri()
+                    Timber.i("mapIntentUri: $mapIntentUri")
+                    // die folgende variante akzeptiert den zoom parameter, fkt aber nicht mit label
+                    val gmmIntentUri =
+                        tileCenter?.let { "geo:${it.latitude},${it.longitude}?z=10" }
+                            ?.toUri()
+                    Timber.i("gmmIntentUri: $gmmIntentUri")
+                    mapIntentUri?.let {
+                        val mapIntent = Intent(Intent.ACTION_VIEW, it)
+                        mapIntent.setPackage("com.google.android.apps.maps")
+                        context.startActivity(mapIntent)
+                    }
+                }) {
+                    Text(stringResource(R.string.google_maps))
                 }
             }
         )
@@ -1536,7 +1562,9 @@ fun MapStateItem(
         )
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

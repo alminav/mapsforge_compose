@@ -604,7 +604,7 @@ fun saveBitmapToGallery(context: Context, bitmap: android.graphics.Bitmap, displ
     }
 
     val fileUri = contentResolver.insert(collectionUri, imageDetails) ?: return null
-
+    Timber.i("Saving screenshot to $fileUri")
     try {
         val outputStream: OutputStream? = contentResolver.openOutputStream(fileUri)
         outputStream.use { stream ->

@@ -131,6 +131,7 @@
     <string name="direction">Direction</string>
     <string name="sunrise">Sunrise</string>
     <string name="sunset">Sunset</string>
+    <string name="google_maps">Google Maps</string>
     <string-array name="wind_directions">
         <item>N</item>
         <item>NNE</item>
