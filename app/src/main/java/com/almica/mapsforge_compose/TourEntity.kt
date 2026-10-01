@@ -3,9 +3,14 @@ package com.almica.mapsforge_compose
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Parcelable
+import android.util.Base64
 import androidx.room.*
 import kotlinx.parcelize.Parcelize
 import org.json.JSONArray
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 @Parcelize
 data class RoutePoint(
@@ -53,13 +58,29 @@ class RoomTypeConverters {
             }
             jsonArray.put(pointArray)
         }
-        return jsonArray.toString()
+        val jsonBytes = jsonArray.toString().toByteArray(Charsets.UTF_8)
+        val byteArrayOutputStream = ByteArrayOutputStream()
+        GZIPOutputStream(byteArrayOutputStream).use { gzip ->
+            gzip.write(jsonBytes)
+        }
+        return Base64.encodeToString(byteArrayOutputStream.toByteArray(), Base64.NO_WRAP)
     }
 
     @TypeConverter
     fun toRoutePointList(value: String): List<RoutePoint> {
         val list = mutableListOf<RoutePoint>()
-        val jsonArray = JSONArray(value)
+        val jsonString = try {
+            val decodedBytes = Base64.decode(value, Base64.DEFAULT)
+            ByteArrayInputStream(decodedBytes).use { bais ->
+                GZIPInputStream(bais).use { gzip ->
+                    gzip.bufferedReader(Charsets.UTF_8).readText()
+                }
+            }
+        } catch (_: Exception) {
+            value
+        }
+
+        val jsonArray = JSONArray(jsonString)
         for (i in 0 until jsonArray.length()) {
             val pointArray = jsonArray.getJSONArray(i)
             list.add(
@@ -77,7 +98,7 @@ class RoomTypeConverters {
     @TypeConverter
     fun fromBitmap(bitmap: Bitmap?): ByteArray? {
         if (bitmap == null) return null
-        val outputStream = java.io.ByteArrayOutputStream()
+        val outputStream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
         return outputStream.toByteArray()
     }
