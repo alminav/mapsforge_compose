@@ -22,7 +22,7 @@ interface TourDao {
     suspend fun deleteTour(tour: TourEntity): Int
 }
 
-@Database(entities = [TourEntity::class], version = 4, exportSchema = false)
+@Database(entities = [TourEntity::class], version = 5, exportSchema = false)
 @TypeConverters(RoomTypeConverters::class)
 abstract class TourDatabase : RoomDatabase() {
     abstract fun tourDao(): TourDao

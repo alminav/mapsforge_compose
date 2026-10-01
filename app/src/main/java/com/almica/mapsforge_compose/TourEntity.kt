@@ -25,11 +25,11 @@ data class RoutePoint(
 data class TourEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String? = null,
-    val timestamp: Long,
+    val timestamp: Long = System.currentTimeMillis(),
     val startTime: Long = 0L,
-    val totalDistanceKm: Double,
-    val elevationGainMeters: Double,
-    val routePoints: List<RoutePoint>,
+    val totalDistanceKm: Double = 0.0,
+    val elevationGainMeters: Double = 0.0,
+    val routePoints: List<RoutePoint> = emptyList(),
     val thumbnail: Bitmap? = null
 ) : Parcelable {
     fun calculateElevationDifference(): Double = calculateElevationDifference(routePoints)
@@ -46,6 +46,14 @@ data class TourEntity(
 }
 
 class RoomTypeConverters {
+    companion object {
+        private val cache = object : LinkedHashMap<String, List<RoutePoint>>(100, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<RoutePoint>>): Boolean {
+                return size > 50
+            }
+        }
+    }
+
     @TypeConverter
     fun fromRoutePointList(value: List<RoutePoint>): String {
         val jsonArray = JSONArray()
@@ -63,11 +71,20 @@ class RoomTypeConverters {
         GZIPOutputStream(byteArrayOutputStream).use { gzip ->
             gzip.write(jsonBytes)
         }
-        return Base64.encodeToString(byteArrayOutputStream.toByteArray(), Base64.NO_WRAP)
+        val result = Base64.encodeToString(byteArrayOutputStream.toByteArray(), Base64.NO_WRAP)
+        synchronized(cache) {
+            cache[result] = value
+        }
+        return result
     }
 
     @TypeConverter
-    fun toRoutePointList(value: String): List<RoutePoint> {
+    fun toRoutePointList(value: String?): List<RoutePoint> {
+        if (value.isNullOrEmpty()) return emptyList()
+        synchronized(cache) {
+            cache[value]?.let { return it }
+        }
+
         val list = mutableListOf<RoutePoint>()
         val jsonString = try {
             val decodedBytes = Base64.decode(value, Base64.DEFAULT)
@@ -80,17 +97,25 @@ class RoomTypeConverters {
             value
         }
 
-        val jsonArray = JSONArray(jsonString)
+        val jsonArray = try {
+            JSONArray(jsonString)
+        } catch (_: Exception) {
+            JSONArray()
+        }
         for (i in 0 until jsonArray.length()) {
-            val pointArray = jsonArray.getJSONArray(i)
+            val pointArray = jsonArray.optJSONArray(i) ?: continue
             list.add(
                 RoutePoint(
-                    latitude = pointArray.getDouble(0),
-                    longitude = pointArray.getDouble(1),
-                    altitude = pointArray.getDouble(2),
+                    latitude = pointArray.optDouble(0, 0.0),
+                    longitude = pointArray.optDouble(1, 0.0),
+                    altitude = pointArray.optDouble(2, 0.0),
                     time = pointArray.optLong(3, 0L)
                 )
             )
+        }
+        
+        synchronized(cache) {
+            cache[value] = list
         }
         return list
     }
